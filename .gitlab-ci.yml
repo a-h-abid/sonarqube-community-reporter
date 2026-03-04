@@ -1,0 +1,117 @@
+# ==============================================================================
+# GitLab CI/CD — SonarQube Scan + Report Generation
+# ==============================================================================
+# Required CI/CD Variables (Settings → CI/CD → Variables):
+#   SONAR_TOKEN          — SonarQube authentication token
+#   SONAR_HOST_URL       — SonarQube server URL (e.g. https://sonarqube.example.com)
+#   SONAR_PROJECT_KEY    — SonarQube project key
+# ==============================================================================
+
+stages:
+  - scan
+  - report
+
+variables:
+  SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"
+  GIT_DEPTH: "0"  # Full clone needed for accurate analysis
+
+# --------------------------------------------------------------------------
+# Stage 1: SonarQube Scan
+# --------------------------------------------------------------------------
+sonar-scan:
+  stage: scan
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  script:
+    - >
+      sonar-scanner
+      -Dsonar.projectKey="${SONAR_PROJECT_KEY}"
+      -Dsonar.host.url="${SONAR_HOST_URL}"
+      -Dsonar.token="${SONAR_TOKEN}"
+      -Dsonar.qualitygate.wait=false
+  artifacts:
+    paths:
+      - .scannerwork/report-task.txt
+    expire_in: 1 hour
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_PIPELINE_SOURCE == "web"  # Manual trigger
+
+# --------------------------------------------------------------------------
+# Stage 2: Generate Report
+# --------------------------------------------------------------------------
+sonar-report:
+  stage: report
+  image: debian:bookworm-slim
+  needs:
+    - job: sonar-scan
+      artifacts: true
+  before_script:
+    - apt-get update && apt-get install -y --no-install-recommends curl jq wkhtmltopdf xvfb ca-certificates
+  script:
+    # Extract the CE task ID from scanner output
+    - TASK_ID=$(grep '^ceTaskId=' .scannerwork/report-task.txt | cut -d= -f2)
+    - echo "CE Task ID - ${TASK_ID}"
+
+    # Make scripts executable
+    - chmod +x scripts/sonar-report.sh scripts/wait-for-analysis.sh scripts/lib/*.sh
+
+    # Generate reports
+    - >
+      ./scripts/sonar-report.sh
+      --url "${SONAR_HOST_URL}"
+      --token "${SONAR_TOKEN}"
+      --project-key "${SONAR_PROJECT_KEY}"
+      --task-id "${TASK_ID}"
+      --wait
+      --formats "json,md,html,pdf"
+      --output-dir "./reports"
+      --fail-on-gate
+  artifacts:
+    paths:
+      - reports/
+    expire_in: 30 days
+    when: always
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_BRANCH == "develop"
+    - if: $CI_PIPELINE_SOURCE == "web"
+
+# --------------------------------------------------------------------------
+# Optional: Report using Docker image (alternative to installing deps inline)
+# --------------------------------------------------------------------------
+# Uncomment to use the pre-built Docker image instead:
+#
+# sonar-report-docker:
+#   stage: report
+#   image:
+#     name: sonar-report-tool:latest  # Build & push to your registry
+#     entrypoint: [""]
+#   needs:
+#     - job: sonar-scan
+#       artifacts: true
+#   script:
+#     - TASK_ID=$(grep '^ceTaskId=' .scannerwork/report-task.txt | cut -d= -f2)
+#     - >
+#       /opt/sonar-report/scripts/sonar-report.sh
+#       --url "${SONAR_HOST_URL}"
+#       --token "${SONAR_TOKEN}"
+#       --project-key "${SONAR_PROJECT_KEY}"
+#       --task-id "${TASK_ID}"
+#       --wait
+#       --formats "json,md,html,pdf"
+#       --output-dir "./reports"
+#       --fail-on-gate
+#   artifacts:
+#     paths:
+#       - reports/
+#     expire_in: 30 days
+#     when: always

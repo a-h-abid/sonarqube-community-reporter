@@ -1,0 +1,22 @@
+# Reports output
+reports/*.json
+reports/*.md
+reports/*.html
+reports/*.pdf
+
+# Environment
+.env
+
+# Logs
+*.log
+
+# SonarQube scanner work
+.scannerwork/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/

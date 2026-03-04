@@ -1,0 +1,116 @@
+# ==============================================================================
+# SonarQube Community Edition + PostgreSQL
+# Compose Specification (modern — no 'version:' key)
+# ==============================================================================
+# Usage:
+#   docker compose up -d                    # Start SonarQube + PostgreSQL
+#   docker compose --profile report up      # Also build & run the report tool
+#   docker compose down -v                  # Stop and remove volumes
+#
+# Prerequisites:
+#   sudo sysctl -w vm.max_map_count=524288  # Required by Elasticsearch in SonarQube
+#   sudo sysctl -w fs.file-max=131072
+#
+# To persist vm.max_map_count across reboots, add to /etc/sysctl.conf:
+#   vm.max_map_count=524288
+#   fs.file-max=131072
+# ==============================================================================
+
+name: sonarqube-report
+
+services:
+  # --------------------------------------------------------------------------
+  # PostgreSQL 16
+  # --------------------------------------------------------------------------
+  db:
+    image: postgres:16-alpine
+    container_name: sonarqube-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sonar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-sonar_password}
+      POSTGRES_DB: ${POSTGRES_DB:-sonarqube}
+    volumes:
+      - postgresql_data:/var/lib/postgresql/data
+    networks:
+      - sonarnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sonar} -d ${POSTGRES_DB:-sonarqube}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # --------------------------------------------------------------------------
+  # SonarQube Community Edition (26.x)
+  # --------------------------------------------------------------------------
+  sonarqube:
+    image: sonarqube:community
+    container_name: sonarqube
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-sonarqube}
+      SONAR_JDBC_USERNAME: ${POSTGRES_USER:-sonar}
+      SONAR_JDBC_PASSWORD: ${POSTGRES_PASSWORD:-sonar_password}
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube_data:/opt/sonarqube/data
+      - sonarqube_logs:/opt/sonarqube/logs
+      - sonarqube_extensions:/opt/sonarqube/extensions
+    networks:
+      - sonarnet
+    ulimits:
+      nofile:
+        soft: 131072
+        hard: 131072
+      nproc:
+        soft: 8192
+        hard: 8192
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9000/api/system/status | grep -qE '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 120s
+
+  # --------------------------------------------------------------------------
+  # Report Tool (on-demand — activated with --profile report)
+  # --------------------------------------------------------------------------
+  report-tool:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: sonar-report-tool
+    profiles:
+      - report
+    depends_on:
+      sonarqube:
+        condition: service_healthy
+    environment:
+      SONAR_URL: http://sonarqube:9000
+      SONAR_TOKEN: ${SONAR_TOKEN:-}
+      SONAR_PROJECT_KEY: ${SONAR_PROJECT_KEY:-}
+      SONAR_BRANCH: ${SONAR_BRANCH:-}
+      SONAR_TASK_ID: ${SONAR_TASK_ID:-}
+      POLL_INTERVAL: ${POLL_INTERVAL:-5}
+      POLL_TIMEOUT: ${POLL_TIMEOUT:-300}
+      REPORT_FORMATS: ${REPORT_FORMATS:-json,md,html,pdf}
+      REPORT_OUTPUT_DIR: /reports
+    volumes:
+      - ./reports:/reports
+    networks:
+      - sonarnet
+
+volumes:
+  postgresql_data:
+  sonarqube_data:
+  sonarqube_logs:
+  sonarqube_extensions:
+
+networks:
+  sonarnet:
+    driver: bridge

@@ -1,0 +1,165 @@
+# ==============================================================================
+# GitHub Actions — SonarQube Scan + Report Generation
+# ==============================================================================
+# This workflow runs SonarQube analysis and generates reports.
+#
+# Required Secrets:
+#   SONAR_TOKEN          — SonarQube authentication token
+#   SONAR_HOST_URL       — SonarQube server URL (e.g. https://sonarqube.example.com)
+#
+# Required Variables (or set in sonar-project.properties):
+#   SONAR_PROJECT_KEY    — SonarQube project key
+# ==============================================================================
+
+name: SonarQube Analysis & Report
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+    inputs:
+      report_formats:
+        description: "Report formats (comma-separated: json,md,html,pdf)"
+        required: false
+        default: "json,md,html,pdf"
+      fail_on_gate:
+        description: "Fail pipeline if quality gate fails"
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  # --------------------------------------------------------------------------
+  # Job 1: Run SonarQube Scanner
+  # --------------------------------------------------------------------------
+  sonar-scan:
+    name: SonarQube Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history needed for accurate analysis
+
+      - name: SonarQube Scan
+        uses: SonarSource/sonarqube-scan-action@v5
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+
+      - name: Upload scanner metadata
+        uses: actions/upload-artifact@v4
+        with:
+          name: scanner-metadata
+          path: .scannerwork/report-task.txt
+          retention-days: 1
+
+  # --------------------------------------------------------------------------
+  # Job 2: Generate Reports
+  # --------------------------------------------------------------------------
+  sonar-report:
+    name: Generate Report
+    runs-on: ubuntu-latest
+    needs: sonar-scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download scanner metadata
+        uses: actions/download-artifact@v4
+        with:
+          name: scanner-metadata
+          path: .scannerwork
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends curl jq wkhtmltopdf xvfb
+
+      - name: Extract task ID from scanner output
+        id: task
+        run: |
+          TASK_ID=$(grep '^ceTaskId=' .scannerwork/report-task.txt | cut -d= -f2)
+          echo "task_id=${TASK_ID}" >> "$GITHUB_OUTPUT"
+          echo "Extracted CE Task ID: ${TASK_ID}"
+
+      - name: Wait for analysis & generate report
+        id: report
+        env:
+          SONAR_URL: ${{ secrets.SONAR_HOST_URL }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: ${{ vars.SONAR_PROJECT_KEY }}
+          SONAR_TASK_ID: ${{ steps.task.outputs.task_id }}
+          REPORT_FORMATS: ${{ github.event.inputs.report_formats || 'json,md,html,pdf' }}
+          REPORT_OUTPUT_DIR: ./reports
+        run: |
+          chmod +x scripts/sonar-report.sh scripts/wait-for-analysis.sh scripts/lib/*.sh
+          ./scripts/sonar-report.sh \
+            --wait \
+            --formats "${REPORT_FORMATS}" \
+            --output-dir "${REPORT_OUTPUT_DIR}" \
+            ${{ (github.event.inputs.fail_on_gate == 'true' || github.event_name != 'workflow_dispatch') && '--fail-on-gate' || '' }}
+
+      - name: Upload reports as artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sonarqube-reports
+          path: reports/
+          retention-days: 30
+
+      - name: Post quality gate status on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const glob = require('glob');
+
+            // Find the markdown report
+            const mdFiles = fs.readdirSync('reports').filter(f => f.endsWith('.md'));
+            if (mdFiles.length === 0) {
+              console.log('No markdown report found');
+              return;
+            }
+
+            const reportContent = fs.readFileSync(`reports/${mdFiles[0]}`, 'utf-8');
+
+            // Truncate if too long for a PR comment (max 65536 chars)
+            const maxLen = 60000;
+            const body = reportContent.length > maxLen
+              ? reportContent.substring(0, maxLen) + '\n\n... (truncated)'
+              : reportContent;
+
+            // Find existing bot comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            const botComment = comments.find(c =>
+              c.user.type === 'Bot' && c.body.includes('SonarQube Analysis Report')
+            );
+
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body,
+              });
+            }

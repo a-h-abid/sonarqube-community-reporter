@@ -1,0 +1,29 @@
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# CI/CD
+.github
+.gitlab-ci.yml
+
+# Documentation
+README.md
+
+# Reports output (generated at runtime)
+reports/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Misc
+*.log
+.scannerwork
