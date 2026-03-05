@@ -4,9 +4,9 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPORT_HTML_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=api.sh
-source "${SCRIPT_DIR}/api.sh"
+source "${_REPORT_HTML_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
 # generate_html_report <report_data_json> <output_dir>
@@ -17,7 +17,7 @@ generate_html_report() {
 
   # Locate the template
   local tpl_dir
-  tpl_dir="$(cd "${SCRIPT_DIR}/../../templates" 2>/dev/null && pwd)" || tpl_dir="/opt/sonar-report/templates"
+  tpl_dir="$(cd "${_REPORT_HTML_SCRIPT_DIR}/../../templates" 2>/dev/null && pwd)" || tpl_dir="/opt/sonar-report/templates"
   local tpl_file="${tpl_dir}/report.html.tpl"
 
   if [[ ! -f "$tpl_file" ]]; then
@@ -177,20 +177,23 @@ generate_html_report() {
   # Multiline replacements (conditions table, top issues) — use awk
   local tmpfile
   tmpfile=$(mktemp)
+  trap 'rm -f "$tmpfile" "${tmpfile}.tmp"' RETURN
 
   echo "$html" > "$tmpfile"
 
   # Replace conditions table
   local escaped_conditions
   escaped_conditions=$(echo "$qg_conditions_table" | sed 's/[&/\]/\\&/g')
-  sed -i "s|{{QG_CONDITIONS_TABLE}}|${escaped_conditions}|g" "$tmpfile" 2>/dev/null || \
+  sed -i "s|{{QG_CONDITIONS_TABLE}}|${escaped_conditions}|g" "$tmpfile" 2>/dev/null || {
     awk -v r="$qg_conditions_table" '{gsub(/\{\{QG_CONDITIONS_TABLE\}\}/, r); print}' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+  }
 
   # Replace issues details table
   local escaped_issues
   escaped_issues=$(echo "$issues_table" | sed 's/[&/\]/\\&/g')
-  sed -i "s|{{ISSUES_TABLE}}|${escaped_issues}|g" "$tmpfile" 2>/dev/null || \
+  sed -i "s|{{ISSUES_TABLE}}|${escaped_issues}|g" "$tmpfile" 2>/dev/null || {
     awk -v r="$issues_table" '{gsub(/\{\{ISSUES_TABLE\}\}/, r); print}' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+  }
 
   # Write final output
   local timestamp

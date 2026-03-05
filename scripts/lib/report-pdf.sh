@@ -4,9 +4,9 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPORT_PDF_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=api.sh
-source "${SCRIPT_DIR}/api.sh"
+source "${_REPORT_PDF_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
 # generate_pdf_report <html_file_path> <output_dir>
