@@ -107,18 +107,20 @@ generate_html_report() {
   hotspot_to_review=$(echo "$report_data" | jq -r '.hotspotsSummary.toReview // 0')
   hotspot_reviewed=$(echo "$report_data" | jq -r '.hotspotsSummary.reviewed // 0')
 
-  # Top issues table
-  local top_issues_table
-  top_issues_table=$(echo "$report_data" | jq -r '
-    if (.topIssues | length) > 0 then
-      "<table><tr><th>#</th><th>Severity</th><th>Type</th><th>Component</th><th>Line</th><th>Message</th></tr>" +
-      ([.topIssues | to_entries[]? |
+  # Issues details table
+  local issues_table
+  issues_table=$(echo "$report_data" | jq -r '
+    if (.issues | length) > 0 then
+      "<table><tr><th>#</th><th>Severity</th><th>Type</th><th>Rule</th><th>Component</th><th>Line</th><th>Message</th><th>Effort</th></tr>" +
+      ([.issues | to_entries[]? |
         "<tr><td>" + ((.key + 1) | tostring) + "</td>" +
         "<td><span class=\"sev sev-" + (.value.severity // "INFO") + "\">" + (.value.severity // "?") + "</span></td>" +
         "<td><span class=\"type-badge\">" + (.value.type // "?") + "</span></td>" +
+        "<td>" + (.value.rule // "") + "</td>" +
         "<td>" + ((.value.component // "") | split(":") | last) + "</td>" +
         "<td>" + ((.value.line // "") | tostring) + "</td>" +
-        "<td>" + (.value.message // "") + "</td></tr>"
+        "<td>" + (.value.message // "") + "</td>" +
+        "<td>" + (.value.effort // "N/A") + "</td></tr>"
       ] | join("")) +
       "</table>"
     else
@@ -184,11 +186,11 @@ generate_html_report() {
   sed -i "s|{{QG_CONDITIONS_TABLE}}|${escaped_conditions}|g" "$tmpfile" 2>/dev/null || \
     awk -v r="$qg_conditions_table" '{gsub(/\{\{QG_CONDITIONS_TABLE\}\}/, r); print}' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
 
-  # Replace top issues table
-  local escaped_top_issues
-  escaped_top_issues=$(echo "$top_issues_table" | sed 's/[&/\]/\\&/g')
-  sed -i "s|{{TOP_ISSUES_TABLE}}|${escaped_top_issues}|g" "$tmpfile" 2>/dev/null || \
-    awk -v r="$top_issues_table" '{gsub(/\{\{TOP_ISSUES_TABLE\}\}/, r); print}' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+  # Replace issues details table
+  local escaped_issues
+  escaped_issues=$(echo "$issues_table" | sed 's/[&/\]/\\&/g')
+  sed -i "s|{{ISSUES_TABLE}}|${escaped_issues}|g" "$tmpfile" 2>/dev/null || \
+    awk -v r="$issues_table" '{gsub(/\{\{ISSUES_TABLE\}\}/, r); print}' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
 
   # Write final output
   local timestamp

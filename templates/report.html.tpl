@@ -257,9 +257,9 @@
     </div>
   </div>
 
-  <!-- Top Issues -->
-  <h2>Top Issues (Most Severe)</h2>
-  {{TOP_ISSUES_TABLE}}
+  <!-- Issues Details -->
+  <h2>Issues Details</h2>
+  {{ISSUES_TABLE}}
 
   <!-- Footer -->
   <div class="footer">
