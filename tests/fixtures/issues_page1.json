@@ -1,0 +1,28 @@
+{
+  "total": 2,
+  "paging": { "pageIndex": 1, "pageSize": 500, "total": 2 },
+  "issues": [
+    {
+      "key": "AXyz111",
+      "severity": "CRITICAL",
+      "type": "BUG",
+      "message": "Null pointer dereference",
+      "component": "my-project:src/Main.java",
+      "line": 42,
+      "rule": "java:S2259",
+      "effort": "30min",
+      "creationDate": "2024-01-15T10:00:00+0000"
+    },
+    {
+      "key": "AXyz222",
+      "severity": "MAJOR",
+      "type": "CODE_SMELL",
+      "message": "Method too complex",
+      "component": "my-project:src/Utils.java",
+      "line": 100,
+      "rule": "java:S3776",
+      "effort": "1h",
+      "creationDate": "2024-01-10T08:00:00+0000"
+    }
+  ]
+}

@@ -37,7 +37,9 @@ sonar_api_get() {
   # Use a temp file for body so we can capture HTTP status separately
   local tmpfile
   tmpfile=$(mktemp)
-  trap 'rm -f "$tmpfile"' RETURN
+  # Guard prevents the trap from failing when it fires in an outer caller's
+  # scope (where $tmpfile is unset) due to bash RETURN traps being shell-wide.
+  trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile"' RETURN
 
   http_code=$(curl -s -o "$tmpfile" -w '%{http_code}' \
     -H "Authorization: Bearer ${SONAR_TOKEN}" \

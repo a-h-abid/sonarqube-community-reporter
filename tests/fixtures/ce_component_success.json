@@ -1,0 +1,11 @@
+{
+  "queue": [],
+  "current": {
+    "id": "AXyz_task_current",
+    "type": "REPORT",
+    "componentId": "my-project",
+    "status": "SUCCESS",
+    "executedAt": "2024-01-15T10:01:00+0000",
+    "analysisId": "AXyz_analysis_789"
+  }
+}
