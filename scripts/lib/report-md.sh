@@ -205,18 +205,20 @@ $(echo "$report_data" | jq -r '
 
 ---
 
-## Top Issues
+## Issues Details
 
 $(echo "$report_data" | jq -r '
-  if (.topIssues | length) > 0 then
-    "| # | Severity | Type | Component | Line | Message |\n|---|----------|------|-----------|------|---------|\n" +
-    ([.topIssues | to_entries[]? |
+  if (.issues | length) > 0 then
+    "| # | Severity | Type | Rule | Component | Line | Message | Effort |\n|---|----------|------|------|-----------|------|---------|--------|\n" +
+    ([.issues | to_entries[]? |
       "| " + ((.key + 1) | tostring) +
       " | " + (.value.severity // "?") +
       " | " + (.value.type // "?") +
+      " | " + (.value.rule // "") +
       " | " + ((.value.component // "") | split(":") | last) +
       " | " + ((.value.line // "") | tostring) +
-      " | " + (.value.message // "") + " |"
+      " | " + (.value.message // "") +
+      " | " + (.value.effort // "N/A") + " |"
     ] | join("\n"))
   else
     "_No open issues found._"

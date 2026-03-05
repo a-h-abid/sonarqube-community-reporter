@@ -127,20 +127,20 @@ fetch_hotspots_summary() {
 }
 
 # ---------------------------------------------------------------------------
-# fetch_top_issues [count]
-#   Fetches the top N most severe unresolved issues.
+# fetch_all_issues
+#   Fetches all unresolved issues using pagination, sorted by severity.
 #   Output: JSON array of issue objects.
 # ---------------------------------------------------------------------------
-fetch_top_issues() {
-  local count="${1:-20}"
+fetch_all_issues() {
   local project_key="${SONAR_PROJECT_KEY}"
-  local branch_param=""
-  [[ -n "${SONAR_BRANCH:-}" ]] && branch_param="&branch=${SONAR_BRANCH}"
 
-  local response
-  response=$(sonar_api_get "issues/search?componentKeys=${project_key}&issueStatuses=OPEN,CONFIRMED&ps=${count}&s=SEVERITY&asc=false${branch_param}") || return 1
+  local params=("componentKeys=${project_key}" "issueStatuses=OPEN,CONFIRMED" "s=SEVERITY" "asc=false")
+  [[ -n "${SONAR_BRANCH:-}" ]] && params+=("branch=${SONAR_BRANCH}")
 
-  echo "$response" | jq '[.issues[]? | {
+  local all_issues
+  all_issues=$(sonar_api_paginated "issues/search" ".issues" 20 "${params[@]}") || return 1
+
+  echo "$all_issues" | jq '[.[]? | {
     key: .key,
     severity: .severity,
     type: .type,
@@ -179,10 +179,10 @@ fetch_all_metrics() {
   hotspots_summary=$(fetch_hotspots_summary) || { log_error "Failed to fetch hotspots"; return 1; }
   log_ok "Hotspots summary fetched"
 
-  log_info "Fetching top issues ..."
-  local top_issues
-  top_issues=$(fetch_top_issues 20) || { log_error "Failed to fetch top issues"; return 1; }
-  log_ok "Top issues fetched"
+  log_info "Fetching all issues ..."
+  local all_issues
+  all_issues=$(fetch_all_issues) || { log_error "Failed to fetch issues"; return 1; }
+  log_ok "Issues fetched"
 
   # Assemble the complete report data
   local report_date
@@ -198,7 +198,7 @@ fetch_all_metrics() {
     --argjson measures "$measures" \
     --argjson issuesSummary "$issues_summary" \
     --argjson hotspotsSummary "$hotspots_summary" \
-    --argjson topIssues "$top_issues" \
+    --argjson issues "$all_issues" \
     '{
       metadata: {
         projectKey: $projectKey,
@@ -212,6 +212,6 @@ fetch_all_metrics() {
       measures: $measures.measures,
       issuesSummary: $issuesSummary,
       hotspotsSummary: $hotspotsSummary,
-      topIssues: $topIssues
+      issues: $issues
     }'
 }

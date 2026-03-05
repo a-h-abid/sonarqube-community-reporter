@@ -9,7 +9,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 - **Multi-format reports** — JSON, Markdown, HTML (styled), and PDF
 - **All key metrics** — Quality Gate, bugs, vulnerabilities, code smells, coverage, duplications, technical debt, security hotspots, ratings (A–E)
 - **New Code Period** — Track metrics on newly added code
-- **Top Issues** — Lists the 20 most severe open issues with file/line details
+- **Issues Details** — Lists all open issues with severity, type, rule, file/line details, and effort
 - **Analysis polling** — Waits for SonarQube Compute Engine to finish before fetching results
 - **CI/CD ready** — GitHub Actions and GitLab CI/CD pipelines included
 - **Docker Compose** — One-command SonarQube + PostgreSQL setup
@@ -240,8 +240,8 @@ Counts by type (Bug, Vulnerability, Code Smell) and severity (Blocker, Critical,
 ### Security Hotspots
 Total count, to-review count, reviewed count.
 
-### Top Issues
-The 20 most severe open issues with file path, line number, rule, and message.
+### Issues Details
+All open issues sorted by severity, with file path, line number, rule, message, and effort.
 
 ---
 
