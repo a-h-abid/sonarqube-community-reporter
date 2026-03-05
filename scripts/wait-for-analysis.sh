@@ -16,9 +16,9 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_WAIT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/api.sh
-source "${SCRIPT_DIR}/lib/api.sh"
+source "${_WAIT_SCRIPT_DIR}/lib/api.sh"
 
 # ---------------------------------------------------------------------------
 # wait_for_analysis

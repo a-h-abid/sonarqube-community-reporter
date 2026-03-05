@@ -23,23 +23,23 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_MAIN_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source library modules
 # shellcheck source=lib/api.sh
-source "${SCRIPT_DIR}/lib/api.sh"
+source "${_MAIN_SCRIPT_DIR}/lib/api.sh"
 # shellcheck source=lib/metrics.sh
-source "${SCRIPT_DIR}/lib/metrics.sh"
+source "${_MAIN_SCRIPT_DIR}/lib/metrics.sh"
 # shellcheck source=lib/report-json.sh
-source "${SCRIPT_DIR}/lib/report-json.sh"
+source "${_MAIN_SCRIPT_DIR}/lib/report-json.sh"
 # shellcheck source=lib/report-md.sh
-source "${SCRIPT_DIR}/lib/report-md.sh"
+source "${_MAIN_SCRIPT_DIR}/lib/report-md.sh"
 # shellcheck source=lib/report-html.sh
-source "${SCRIPT_DIR}/lib/report-html.sh"
+source "${_MAIN_SCRIPT_DIR}/lib/report-html.sh"
 # shellcheck source=lib/report-pdf.sh
-source "${SCRIPT_DIR}/lib/report-pdf.sh"
+source "${_MAIN_SCRIPT_DIR}/lib/report-pdf.sh"
 # shellcheck source=wait-for-analysis.sh
-source "${SCRIPT_DIR}/wait-for-analysis.sh"
+source "${_MAIN_SCRIPT_DIR}/wait-for-analysis.sh"
 
 # ===========================================================================
 # Defaults (can be overridden by env vars or CLI args)
