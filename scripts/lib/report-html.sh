@@ -202,7 +202,7 @@ generate_html_report() {
   local filepath="${output_dir}/${filename}"
   mkdir -p "$output_dir"
 
-  cp "$tmpfile" "$filepath"
+  mv "$tmpfile" "$filepath"
 
   log_ok "HTML report → ${filepath}"
   echo "$filepath"
