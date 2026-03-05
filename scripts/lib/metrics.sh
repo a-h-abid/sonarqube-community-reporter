@@ -188,30 +188,33 @@ fetch_all_metrics() {
   local report_date
   report_date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
-  jq -n \
+  # Pipe large JSON data via stdin to avoid "Argument list too long" errors
+  # when the issues list is large enough to exceed the OS ARG_MAX limit.
+  {
+    echo "$quality_gate"
+    echo "$measures"
+    echo "$issues_summary"
+    echo "$hotspots_summary"
+    echo "$all_issues"
+  } | jq -s \
     --arg projectKey "${SONAR_PROJECT_KEY}" \
     --arg branch "${SONAR_BRANCH:-main}" \
     --arg sonarUrl "${SONAR_URL}" \
     --arg reportDate "$report_date" \
     --arg analysisId "${ANALYSIS_ID:-}" \
-    --argjson qualityGate "$quality_gate" \
-    --argjson measures "$measures" \
-    --argjson issuesSummary "$issues_summary" \
-    --argjson hotspotsSummary "$hotspots_summary" \
-    --argjson issues "$all_issues" \
     '{
       metadata: {
         projectKey: $projectKey,
-        projectName: $measures.componentName,
+        projectName: .[1].componentName,
         branch: $branch,
         sonarUrl: $sonarUrl,
         reportDate: $reportDate,
         analysisId: $analysisId
       },
-      qualityGate: $qualityGate,
-      measures: $measures.measures,
-      issuesSummary: $issuesSummary,
-      hotspotsSummary: $hotspotsSummary,
-      issues: $issues
+      qualityGate: .[0],
+      measures: .[1].measures,
+      issuesSummary: .[2],
+      hotspotsSummary: .[3],
+      issues: .[4]
     }'
 }
