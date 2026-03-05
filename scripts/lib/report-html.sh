@@ -177,7 +177,9 @@ generate_html_report() {
   # Multiline replacements (conditions table, top issues) — use awk
   local tmpfile
   tmpfile=$(mktemp)
-  trap 'rm -f "$tmpfile" "${tmpfile}.tmp"' RETURN
+  # Guard prevents the trap from failing when it fires in an outer caller's
+  # scope (where $tmpfile is unset) due to bash RETURN traps being shell-wide.
+  trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile" "${tmpfile}.tmp"' RETURN
 
   echo "$html" > "$tmpfile"
 

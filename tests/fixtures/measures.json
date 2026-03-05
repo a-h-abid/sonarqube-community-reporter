@@ -1,0 +1,28 @@
+{
+  "component": {
+    "key": "my-project",
+    "name": "My Project",
+    "qualifier": "TRK",
+    "measures": [
+      { "metric": "bugs",                       "value": "2"   },
+      { "metric": "vulnerabilities",            "value": "1"   },
+      { "metric": "code_smells",                "value": "15"  },
+      { "metric": "coverage",                   "value": "78.5"},
+      { "metric": "duplicated_lines_density",   "value": "3.2" },
+      { "metric": "ncloc",                      "value": "1234"},
+      { "metric": "sqale_index",                "value": "120" },
+      { "metric": "sqale_debt_ratio",           "value": "2.5" },
+      { "metric": "reliability_rating",         "value": "3.0" },
+      { "metric": "security_rating",            "value": "2.0" },
+      { "metric": "sqale_rating",               "value": "1.0" },
+      { "metric": "security_hotspots_reviewed", "value": "100" },
+      { "metric": "security_review_rating",     "value": "1.0" },
+      { "metric": "alert_status",               "value": "OK"  },
+      { "metric": "new_bugs",                   "value": "0"   },
+      { "metric": "new_vulnerabilities",        "value": "0"   },
+      { "metric": "new_code_smells",            "value": "3"   },
+      { "metric": "new_coverage",               "value": "85.0"},
+      { "metric": "new_duplicated_lines_density","value": "0.0"}
+    ]
+  }
+}

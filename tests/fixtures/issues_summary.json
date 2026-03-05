@@ -1,0 +1,25 @@
+{
+  "total": 18,
+  "issues": [],
+  "paging": { "pageIndex": 1, "pageSize": 1, "total": 18 },
+  "facets": [
+    {
+      "property": "types",
+      "values": [
+        { "val": "BUG",           "count": 2  },
+        { "val": "VULNERABILITY", "count": 1  },
+        { "val": "CODE_SMELL",    "count": 15 }
+      ]
+    },
+    {
+      "property": "severities",
+      "values": [
+        { "val": "BLOCKER",  "count": 1 },
+        { "val": "CRITICAL", "count": 2 },
+        { "val": "MAJOR",    "count": 5 },
+        { "val": "MINOR",    "count": 7 },
+        { "val": "INFO",     "count": 3 }
+      ]
+    }
+  ]
+}
