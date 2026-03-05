@@ -26,6 +26,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 | `curl` | Any | API calls |
 | `jq` | 1.6+ | JSON processing |
 | `wkhtmltopdf` | Any | PDF generation (optional) |
+| `bats` | 1.x | Running the test suite (optional) |
 
 ---
 
@@ -212,6 +213,43 @@ The pipeline runs on:
 
 ---
 
+## Testing
+
+The repository includes a [bats](https://bats-core.readthedocs.io/) test suite (114 tests) that validates all major script functions without making real HTTP calls — all SonarQube API interactions are mocked.
+
+### Prerequisites
+
+Install `bats` and `jq`:
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install -y bats jq
+
+# macOS
+brew install bats-core jq
+```
+
+### Running the Tests
+
+```bash
+bash tests/run_tests.sh
+```
+
+### Test Coverage
+
+| File | Tests | What's Covered |
+|------|-------|---------------|
+| `tests/test_api.bats` | 40 | `rating_to_letter`, `format_duration`, `safe_jq`, `sonar_api_get` (mocked `curl`), `check_connectivity`, `sonar_api_paginated` |
+| `tests/test_metrics.bats` | 28 | All `fetch_*` functions with `sonar_api_get` mocked per-test |
+| `tests/test_wait_for_analysis.bats` | 18 | `extract_task_id_from_report`, `_poll_by_task_id` (including PENDING→SUCCESS transition), `_poll_by_component`, `wait_for_analysis` dispatch |
+| `tests/test_reports.bats` | 28 | `generate_json_report`, `generate_md_report`, `generate_html_report` using fixture data — validates file creation, content, and no unreplaced template placeholders |
+
+Test fixtures (JSON files representing every SonarQube API response shape) live in `tests/fixtures/`.
+
+The test suite also runs automatically in CI via the **Lint and Test** GitHub Actions workflow (`.github/workflows/test.yml`) on every push and pull request.
+
+---
+
 ## Report Contents
 
 Each report includes the following sections:
@@ -263,9 +301,18 @@ All open issues sorted by severity, with file path, line number, rule, message, 
 │       └── report-pdf.sh           # PDF report generator (wkhtmltopdf)
 ├── templates/
 │   └── report.html.tpl             # Styled HTML template
+├── tests/
+│   ├── run_tests.sh                # Single-command test runner
+│   ├── helpers.bash                # Shared bats helpers (counter mocks)
+│   ├── test_api.bats               # Tests for scripts/lib/api.sh
+│   ├── test_metrics.bats           # Tests for scripts/lib/metrics.sh
+│   ├── test_wait_for_analysis.bats # Tests for scripts/wait-for-analysis.sh
+│   ├── test_reports.bats           # Tests for report generators
+│   └── fixtures/                   # JSON API response fixtures
 ├── .github/
 │   └── workflows/
-│       └── sonar-report.yml        # GitHub Actions workflow
+│       ├── sonar-report.yml        # GitHub Actions workflow (scan & report)
+│       └── test.yml                # GitHub Actions workflow (lint & test)
 ├── .gitlab-ci.yml                  # GitLab CI/CD pipeline
 ├── reports/                        # Output directory (gitignored)
 │   └── .gitkeep
