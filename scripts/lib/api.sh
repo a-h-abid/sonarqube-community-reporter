@@ -2,6 +2,10 @@
 # ==============================================================================
 # api.sh — Shared SonarQube API helper functions
 # ==============================================================================
+# Source guard — prevent multiple inclusions
+[[ -n "${_API_SH_LOADED:-}" ]] && return 0
+_API_SH_LOADED=1
+
 set -euo pipefail
 
 # Colours (disabled when stdout is not a terminal)

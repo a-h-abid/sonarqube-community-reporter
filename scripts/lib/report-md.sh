@@ -4,9 +4,9 @@
 # ==============================================================================
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_REPORT_MD_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=api.sh
-source "${SCRIPT_DIR}/api.sh"
+source "${_REPORT_MD_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
 # generate_md_report <report_data_json> <output_dir>

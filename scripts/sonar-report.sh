@@ -62,7 +62,7 @@ FAIL_ON_GATE=false
 # CLI Argument Parsing
 # ===========================================================================
 show_help() {
-  head -n 20 "$0" | grep '^#' | sed 's/^# \?//'
+  head -n 23 "$0" | grep '^#' | sed 's/^# \?//'
   exit 0
 }
 
