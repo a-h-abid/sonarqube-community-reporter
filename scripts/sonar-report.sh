@@ -25,6 +25,13 @@ set -euo pipefail
 
 _MAIN_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
+# Source .env from parent directory if it exists.
+# WARNING: The .env file is sourced as shell code; only use trusted content.
+if [[ -f "${_MAIN_SCRIPT_DIR}/../.env" ]]; then
+  # shellcheck source=/dev/null
+  source "${_MAIN_SCRIPT_DIR}/../.env"
+fi
+
 # Source library modules
 # shellcheck source=lib/api.sh
 source "${_MAIN_SCRIPT_DIR}/lib/api.sh"
