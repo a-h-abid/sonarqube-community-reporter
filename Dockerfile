@@ -19,24 +19,37 @@
 
 FROM debian:bookworm-slim
 
+ARG TARGETPLATFORM
+ARG TARGETARCH
+
 LABEL maintainer="Ahmedul Haque Abid <a_h_abid@hotmail.com>"
 LABEL description="SonarQube Analysis Report Generator"
 
-# Install dependencies
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
-      bash \
-      curl \
-      ca-certificates \
-      jq \
-      wkhtmltopdf \
-      xvfb \
-    && rm -rf /var/lib/apt/lists/*
+# Install dependencies.
+# wkhtmltopdf/xvfb are optional at build time so arm64 builds remain usable
+# even if PDF packages are temporarily unavailable for a target architecture.
+RUN set -eux; \
+        apt-get update; \
+        apt-get install -y --no-install-recommends \
+            bash \
+            curl \
+            ca-certificates \
+            jq; \
+        if apt-cache show wkhtmltopdf >/dev/null 2>&1 && apt-cache show xvfb >/dev/null 2>&1; then \
+            apt-get install -y --no-install-recommends wkhtmltopdf xvfb; \
+            echo "Installed wkhtmltopdf/xvfb for ${TARGETPLATFORM:-unknown} (${TARGETARCH:-unknown})"; \
+        else \
+            echo "wkhtmltopdf/xvfb not available for ${TARGETPLATFORM:-unknown} (${TARGETARCH:-unknown}); PDF generation will be skipped at runtime."; \
+        fi; \
+        rm -rf /var/lib/apt/lists/*
 
 # Create a wrapper for wkhtmltopdf with xvfb (needed for headless PDF gen)
-RUN printf '#!/bin/bash\nxvfb-run -a --server-args="-screen 0, 1024x768x24" /usr/bin/wkhtmltopdf "$@"\n' \
-      > /usr/local/bin/wkhtmltopdf-xvfb && \
-    chmod +x /usr/local/bin/wkhtmltopdf-xvfb
+# only when both binaries are present.
+RUN if command -v wkhtmltopdf >/dev/null 2>&1 && command -v xvfb-run >/dev/null 2>&1; then \
+            printf '#!/usr/bin/env bash\nxvfb-run -a --server-args="-screen 0, 1024x768x24" /usr/bin/wkhtmltopdf "$@"\n' \
+                > /usr/local/bin/wkhtmltopdf-xvfb && \
+            chmod +x /usr/local/bin/wkhtmltopdf-xvfb; \
+        fi
 
 # Copy scripts and templates
 COPY scripts/ /opt/sonar-report/scripts/
