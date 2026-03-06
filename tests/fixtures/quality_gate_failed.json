@@ -1,0 +1,16 @@
+{
+  "projectStatus": {
+    "status": "ERROR",
+    "conditions": [
+      {
+        "status": "ERROR",
+        "metricKey": "new_reliability_rating",
+        "comparator": "GT",
+        "errorThreshold": "1",
+        "actualValue": "3"
+      }
+    ],
+    "periods": [],
+    "ignoredConditions": false
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "task": {
+    "id": "AXyz_task_123",
+    "type": "REPORT",
+    "componentId": "my-project",
+    "status": "SUCCESS",
+    "submittedAt": "2024-01-15T10:00:00+0000",
+    "executedAt": "2024-01-15T10:01:00+0000",
+    "analysisId": "AXyz_analysis_456"
+  }
+}

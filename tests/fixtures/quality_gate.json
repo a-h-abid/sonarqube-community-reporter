@@ -1,0 +1,23 @@
+{
+  "projectStatus": {
+    "status": "OK",
+    "conditions": [
+      {
+        "status": "OK",
+        "metricKey": "new_reliability_rating",
+        "comparator": "GT",
+        "errorThreshold": "1",
+        "actualValue": "1"
+      },
+      {
+        "status": "ERROR",
+        "metricKey": "new_coverage",
+        "comparator": "LT",
+        "errorThreshold": "80",
+        "actualValue": "65.3"
+      }
+    ],
+    "periods": [],
+    "ignoredConditions": false
+  }
+}
