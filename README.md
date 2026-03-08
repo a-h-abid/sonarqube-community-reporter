@@ -144,13 +144,13 @@ SONAR_TOKEN=squ_xxxxx SONAR_PROJECT_KEY=my-project \
 
 This repository publishes container images to GitHub Container Registry (GHCR) on tag/release:
 
-- `ghcr.io/a-h-abid/sonarqube-community-reporter:0.4.0`
+- `ghcr.io/a-h-abid/sonarqube-community-reporter:0.5.0`
 - `ghcr.io/a-h-abid/sonarqube-community-reporter:latest`
 
 Run with a specific version tag:
 
 ```bash
-docker pull ghcr.io/a-h-abid/sonarqube-community-reporter:0.4.0
+docker pull ghcr.io/a-h-abid/sonarqube-community-reporter:0.5.0
 
 docker run --rm \
   -e SONAR_URL=http://host.docker.internal:9000 \
@@ -158,7 +158,7 @@ docker run --rm \
   -e SONAR_PROJECT_KEY=my-project \
   -e REPORT_FORMATS=json,md,html,pdf,xlsx,ods \
   -v "$(pwd)/reports:/reports" \
-  ghcr.io/a-h-abid/sonarqube-community-reporter:0.4.0 --wait
+  ghcr.io/a-h-abid/sonarqube-community-reporter:0.5.0 --wait
 ```
 
 Run with `latest`:
