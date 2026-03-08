@@ -1,12 +1,12 @@
 # SonarQube Community Reporter
 
-Generate analysis reports from **SonarQube Community Edition** via the Web API. Outputs reports in **JSON**, **Markdown**, **HTML**, and **PDF** formats — ready for dashboards, audits, and CI/CD pipelines.
+Generate analysis reports from **SonarQube Community Edition** via the Web API. Outputs reports in **JSON**, **Markdown**, **HTML**, **PDF**, **XLSX**, and **ODS** formats — ready for dashboards, audits, and CI/CD pipelines.
 
 ---
 
 ## Features
 
-- **Multi-format reports** — JSON, Markdown, HTML (styled), and PDF with project metadata including report date, last analysis datetime, and analysis ID
+- **Multi-format reports** — JSON, Markdown, HTML (styled), PDF, XLSX, and ODS with project metadata including report date, last analysis datetime, and analysis ID
 - **All key metrics** — Quality Gate, bugs, vulnerabilities, code smells, coverage, duplications, technical debt, security hotspots, ratings (A–E)
 - **New Code Period** — Track metrics on newly added code
 - **Issues Details** — Lists all open issues with severity, type, rule, file/line details, and effort
@@ -26,6 +26,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 | `curl` | Any | API calls |
 | `jq` | 1.6+ | JSON processing |
 | `wkhtmltopdf` | Any | PDF generation (optional) |
+| `gnumeric` (`ssconvert`) | Any | XLSX/ODS generation (optional) |
 | `bats` | 1.x | Running the test suite (optional) |
 
 ---
@@ -79,7 +80,7 @@ cp .env.example .env
   --url http://localhost:9000 \
   --token YOUR_TOKEN \
   --project-key my-project \
-  --formats json,md,html,pdf \
+  --formats json,md,html,pdf,xlsx,ods \
   --wait
 ```
 
@@ -101,7 +102,7 @@ Options:
   --branch BRANCH        Branch name (optional)     (env: SONAR_BRANCH)
   --task-id ID           CE task ID to poll         (env: SONAR_TASK_ID)
   --formats FMT          Comma-separated formats    (env: REPORT_FORMATS)
-                         Supported: json,md,html,pdf
+                         Supported: json,md,html,pdf,xlsx,ods
   --output-dir DIR       Output directory           (env: REPORT_OUTPUT_DIR)
   --wait                 Wait for analysis to complete
   --no-wait              Skip analysis polling (default)
@@ -130,7 +131,7 @@ docker run --rm \
   -e SONAR_URL=http://host.docker.internal:9000 \
   -e SONAR_TOKEN=squ_xxxxx \
   -e SONAR_PROJECT_KEY=my-project \
-  -e REPORT_FORMATS=json,md,html,pdf \
+  -e REPORT_FORMATS=json,md,html,pdf,xlsx,ods \
   -v $(pwd)/reports:/reports \
   sonar-report-tool --wait
 
@@ -155,7 +156,7 @@ docker run --rm \
   -e SONAR_URL=http://host.docker.internal:9000 \
   -e SONAR_TOKEN=squ_xxxxx \
   -e SONAR_PROJECT_KEY=my-project \
-  -e REPORT_FORMATS=json,md,html,pdf \
+  -e REPORT_FORMATS=json,md,html,pdf,xlsx,ods \
   -v "$(pwd)/reports:/reports" \
   ghcr.io/a-h-abid/sonarqube-community-reporter:0.4.0 --wait
 ```
@@ -169,7 +170,7 @@ docker run --rm \
   -e SONAR_URL=http://host.docker.internal:9000 \
   -e SONAR_TOKEN=squ_xxxxx \
   -e SONAR_PROJECT_KEY=my-project \
-  -e REPORT_FORMATS=json,md,html,pdf \
+  -e REPORT_FORMATS=json,md,html,pdf,xlsx,ods \
   -v "$(pwd)/reports:/reports" \
   ghcr.io/a-h-abid/sonarqube-community-reporter:latest --wait
 ```

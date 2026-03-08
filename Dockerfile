@@ -12,7 +12,7 @@
 #     -e SONAR_URL=http://sonarqube:9000 \
 #     -e SONAR_TOKEN=squ_xxxxx \
 #     -e SONAR_PROJECT_KEY=my-project \
-#     -e REPORT_FORMATS=json,md,html,pdf \
+#     -e REPORT_FORMATS=json,md,html,pdf,xlsx,ods \
 #     -v $(pwd)/reports:/reports \
 #     sonar-report-tool
 # ==============================================================================
@@ -26,8 +26,8 @@ LABEL maintainer="Ahmedul Haque Abid <a_h_abid@hotmail.com>"
 LABEL description="SonarQube Analysis Report Generator"
 
 # Install dependencies.
-# wkhtmltopdf/xvfb are optional at build time so arm64 builds remain usable
-# even if PDF packages are temporarily unavailable for a target architecture.
+# wkhtmltopdf/xvfb and gnumeric are optional at build time so arm64 builds
+# remain usable even if some packages are temporarily unavailable.
 RUN set -eux; \
         apt-get update; \
         apt-get install -y --no-install-recommends \
@@ -40,6 +40,12 @@ RUN set -eux; \
             echo "Installed wkhtmltopdf/xvfb for ${TARGETPLATFORM:-unknown} (${TARGETARCH:-unknown})"; \
         else \
             echo "wkhtmltopdf/xvfb not available for ${TARGETPLATFORM:-unknown} (${TARGETARCH:-unknown}); PDF generation will be skipped at runtime."; \
+        fi; \
+        if apt-cache show gnumeric >/dev/null 2>&1; then \
+            apt-get install -y --no-install-recommends gnumeric; \
+            echo "Installed gnumeric (ssconvert) for ${TARGETPLATFORM:-unknown} (${TARGETARCH:-unknown})"; \
+        else \
+            echo "gnumeric not available for ${TARGETPLATFORM:-unknown} (${TARGETARCH:-unknown}); XLSX/ODS generation will be skipped at runtime."; \
         fi; \
         rm -rf /var/lib/apt/lists/*
 
@@ -71,7 +77,7 @@ ENV SONAR_URL=http://localhost:9000 \
     SONAR_TASK_ID="" \
     POLL_INTERVAL=5 \
     POLL_TIMEOUT=300 \
-    REPORT_FORMATS="json,md,html,pdf" \
+    REPORT_FORMATS="json,md,html,pdf,xlsx,ods" \
     REPORT_OUTPUT_DIR="/reports"
 
 ENTRYPOINT ["/opt/sonar-report/scripts/sonar-report.sh"]

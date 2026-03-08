@@ -9,6 +9,8 @@
 #   generate_json_report  (scripts/lib/report-json.sh)
 #   generate_md_report    (scripts/lib/report-md.sh)
 #   generate_html_report  (scripts/lib/report-html.sh)
+#   generate_xlsx_report  (scripts/lib/report-xlsx.sh)
+#   generate_ods_report   (scripts/lib/report-ods.sh)
 #
 # No real HTTP calls are made — all tests use pre-built report_data JSON.
 # ==============================================================================
@@ -103,6 +105,10 @@ setup() {
   source "${REPO_ROOT}/scripts/lib/report-md.sh"
   # shellcheck source=../scripts/lib/report-html.sh
   source "${REPO_ROOT}/scripts/lib/report-html.sh"
+  # shellcheck source=../scripts/lib/report-xlsx.sh
+  source "${REPO_ROOT}/scripts/lib/report-xlsx.sh"
+  # shellcheck source=../scripts/lib/report-ods.sh
+  source "${REPO_ROOT}/scripts/lib/report-ods.sh"
 }
 
 teardown() {
@@ -394,4 +400,136 @@ teardown() {
   local filepath="${lines[-1]}"
   # Verify the special chars message appears in the output
   grep -q 'Use || instead of | and' "$filepath"
+}
+
+# ===========================================================================
+# spreadsheet helper data
+# ===========================================================================
+
+@test "write_summary_csv: contains KPI rows and excludes quality gate conditions table" {
+  local summary_csv
+  summary_csv=$(mktemp)
+  run write_summary_csv "$_REPORT_DATA_FILE" "$summary_csv"
+  [ "$status" -eq 0 ]
+
+  grep -q '"Metric","Value"' "$summary_csv"
+  grep -q '"Quality Gate Status","OK"' "$summary_csv"
+  grep -q '"Bugs","2"' "$summary_csv"
+
+  # Summary sheet is KPI-only (no condition-level table rows)
+  ! grep -q 'new_reliability_rating' "$summary_csv"
+
+  rm -f "$summary_csv"
+}
+
+@test "write_issues_csv: includes all issue detail columns" {
+  local issues_csv
+  issues_csv=$(mktemp)
+  run write_issues_csv "$_REPORT_DATA_FILE" "$issues_csv"
+  [ "$status" -eq 0 ]
+
+  grep -q '"Key","Severity","Type","Rule","Component","Line","Message","Effort","Creation Date"' "$issues_csv"
+  grep -q '"AXyz111","CRITICAL","BUG","java:S2259","my-project:src/Main.java","42","Null pointer dereference","30min","2024-01-15T10:00:00+0000"' "$issues_csv"
+
+  rm -f "$issues_csv"
+}
+
+# ===========================================================================
+# generate_xlsx_report
+# ===========================================================================
+
+@test "generate_xlsx_report: creates a file in output dir" {
+  if ! command -v ssconvert &>/dev/null; then
+    skip "ssconvert is not installed"
+  fi
+
+  run generate_xlsx_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ -f "${lines[-1]}" ]
+}
+
+@test "generate_xlsx_report: output file has .xlsx extension" {
+  if ! command -v ssconvert &>/dev/null; then
+    skip "ssconvert is not installed"
+  fi
+
+  run generate_xlsx_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "${lines[-1]}" == *.xlsx ]]
+}
+
+@test "generate_xlsx_report: contains required two sheets" {
+  if ! command -v ssconvert &>/dev/null || ! command -v unzip &>/dev/null; then
+    skip "ssconvert or unzip is not installed"
+  fi
+
+  run generate_xlsx_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+
+  local workbook_xml
+  workbook_xml=$(unzip -p "$filepath" xl/workbook.xml)
+
+  [[ "$workbook_xml" == *'name="Overall Summary"'* ]]
+  [[ "$workbook_xml" == *'name="Issues Details"'* ]]
+
+  local sheet_count
+  sheet_count=$(echo "$workbook_xml" | grep -o '<sheet ' | wc -l)
+  [ "$sheet_count" -eq 2 ]
+}
+
+@test "generate_xlsx_report: gracefully skips when ssconvert is unavailable" {
+  SSCONVERT_BIN="__missing_ssconvert__" run generate_xlsx_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipping XLSX generation"* ]]
+}
+
+# ===========================================================================
+# generate_ods_report
+# ===========================================================================
+
+@test "generate_ods_report: creates a file in output dir" {
+  if ! command -v ssconvert &>/dev/null; then
+    skip "ssconvert is not installed"
+  fi
+
+  run generate_ods_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ -f "${lines[-1]}" ]
+}
+
+@test "generate_ods_report: output file has .ods extension" {
+  if ! command -v ssconvert &>/dev/null; then
+    skip "ssconvert is not installed"
+  fi
+
+  run generate_ods_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "${lines[-1]}" == *.ods ]]
+}
+
+@test "generate_ods_report: contains required two sheets" {
+  if ! command -v ssconvert &>/dev/null || ! command -v unzip &>/dev/null; then
+    skip "ssconvert or unzip is not installed"
+  fi
+
+  run generate_ods_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+
+  local content_xml
+  content_xml=$(unzip -p "$filepath" content.xml)
+
+  [[ "$content_xml" == *'table:name="Overall Summary"'* ]]
+  [[ "$content_xml" == *'table:name="Issues Details"'* ]]
+
+  local sheet_count
+  sheet_count=$(echo "$content_xml" | grep -o 'table:table table:name=' | wc -l)
+  [ "$sheet_count" -eq 2 ]
+}
+
+@test "generate_ods_report: gracefully skips when ssconvert is unavailable" {
+  SSCONVERT_BIN="__missing_ssconvert__" run generate_ods_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipping ODS generation"* ]]
 }

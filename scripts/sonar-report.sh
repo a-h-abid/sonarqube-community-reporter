@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # sonar-report.sh — Main entrypoint: fetch SonarQube analysis data & generate
-#                    reports in JSON, Markdown, HTML, and PDF formats.
+#                    reports in JSON, Markdown, HTML, PDF, XLSX, and ODS.
 # ==============================================================================
 # Usage:
 #   ./scripts/sonar-report.sh [OPTIONS]
@@ -12,7 +12,7 @@
 #   --project-key KEY      Project key                (env: SONAR_PROJECT_KEY)
 #   --branch BRANCH        Branch name (optional)     (env: SONAR_BRANCH)
 #   --task-id ID           CE task ID to poll         (env: SONAR_TASK_ID)
-#   --formats FMT          Comma-separated: json,md,html,pdf (env: REPORT_FORMATS)
+#   --formats FMT          Comma-separated: json,md,html,pdf,xlsx,ods (env: REPORT_FORMATS)
 #   --output-dir DIR       Output directory           (env: REPORT_OUTPUT_DIR)
 #   --wait                 Wait for analysis to finish before generating report
 #   --no-wait              Skip analysis polling (default)
@@ -45,6 +45,10 @@ source "${_MAIN_SCRIPT_DIR}/lib/report-md.sh"
 source "${_MAIN_SCRIPT_DIR}/lib/report-html.sh"
 # shellcheck source=lib/report-pdf.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-pdf.sh"
+# shellcheck source=lib/report-xlsx.sh
+source "${_MAIN_SCRIPT_DIR}/lib/report-xlsx.sh"
+# shellcheck source=lib/report-ods.sh
+source "${_MAIN_SCRIPT_DIR}/lib/report-ods.sh"
 # shellcheck source=wait-for-analysis.sh
 source "${_MAIN_SCRIPT_DIR}/wait-for-analysis.sh"
 
@@ -56,7 +60,7 @@ SONAR_TOKEN="${SONAR_TOKEN:-}"
 SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-}"
 SONAR_BRANCH="${SONAR_BRANCH:-}"
 SONAR_TASK_ID="${SONAR_TASK_ID:-}"
-REPORT_FORMATS="${REPORT_FORMATS:-json,md,html,pdf}"
+REPORT_FORMATS="${REPORT_FORMATS:-json,md,html,pdf,xlsx,ods}"
 REPORT_OUTPUT_DIR="${REPORT_OUTPUT_DIR:-./reports}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 POLL_TIMEOUT="${POLL_TIMEOUT:-300}"
@@ -201,6 +205,16 @@ main() {
         fi
         local f
         f=$(generate_pdf_report "$html_file" "$REPORT_OUTPUT_DIR")
+        [[ -n "$f" ]] && generated_files+=("$f")
+        ;;
+      xlsx)
+        local f
+        f=$(generate_xlsx_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+        [[ -n "$f" ]] && generated_files+=("$f")
+        ;;
+      ods)
+        local f
+        f=$(generate_ods_report "$report_data_file" "$REPORT_OUTPUT_DIR")
         [[ -n "$f" ]] && generated_files+=("$f")
         ;;
       *)

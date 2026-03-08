@@ -17,7 +17,7 @@ services:
       SONAR_TASK_ID: ${SONAR_TASK_ID:-}
       POLL_INTERVAL: ${POLL_INTERVAL:-5}
       POLL_TIMEOUT: ${POLL_TIMEOUT:-300}
-      REPORT_FORMATS: ${REPORT_FORMATS:-json,md,html,pdf}
+      REPORT_FORMATS: ${REPORT_FORMATS:-json,md,html,pdf,xlsx,ods}
       REPORT_OUTPUT_DIR: /reports
     volumes:
       - ./reports:/reports
