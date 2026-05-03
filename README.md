@@ -143,24 +143,7 @@ SONAR_TOKEN=squ_xxxxx SONAR_PROJECT_KEY=my-project \
 
 ### Using Published GHCR Image
 
-This repository publishes container images to GitHub Container Registry (GHCR) on tag/release:
-
-- `ghcr.io/a-h-abid/sonarqube-community-reporter:0.6.0`
-- `ghcr.io/a-h-abid/sonarqube-community-reporter:latest`
-
-Run with a specific version tag:
-
-```bash
-docker pull ghcr.io/a-h-abid/sonarqube-community-reporter:0.6.0
-
-docker run --rm \
-  -e SONAR_URL=http://host.docker.internal:9000 \
-  -e SONAR_TOKEN=squ_xxxxx \
-  -e SONAR_PROJECT_KEY=my-project \
-  -e REPORT_FORMATS=json,md,html,pdf,xlsx,ods \
-  -v "$(pwd)/reports:/reports" \
-  ghcr.io/a-h-abid/sonarqube-community-reporter:0.6.0 --wait
-```
+This repository publishes container images to GitHub Container Registry (GHCR).
 
 Run with `latest`:
 
@@ -175,6 +158,8 @@ docker run --rm \
   -v "$(pwd)/reports:/reports" \
   ghcr.io/a-h-abid/sonarqube-community-reporter:latest --wait
 ```
+
+For specific version, [see here](https://github.com/users/a-h-abid/packages/container/package/sonarqube-community-reporter).
 
 If the package is private, authenticate first:
 
