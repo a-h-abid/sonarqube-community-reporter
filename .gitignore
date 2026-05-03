@@ -1,8 +1,5 @@
 # Reports output
-reports/*.json
-reports/*.md
-reports/*.html
-reports/*.pdf
+reports/
 
 # Environment
 .env
