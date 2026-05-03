@@ -479,7 +479,17 @@ teardown() {
   [ "$status" -eq 0 ]
   local filepath="${lines[-1]}"
   grep -q 'class="cards cards-6"' "$filepath"
-  grep -q 'class="card-wrap"' "$filepath"
+  grep -q 'class="card-wrap pdf-row-start-2"' "$filepath"
+  grep -q '\.cards-6 \.card-wrap { width: 25%; }' "$filepath"
+  grep -q '\.cards-4 \.card-wrap:nth-child(4n + 1),' "$filepath"
+  grep -q '\.cards-5 \.card-wrap:nth-child(5n + 1) { clear: left; }' "$filepath"
+  grep -q 'min-height: 136px;' "$filepath"
+}
+
+@test "generate_pdf_report: uses print media and desktop viewport for card grids" {
+  grep -q -- '--viewport-size 1280x1024' "${REPO_ROOT}/scripts/lib/report-pdf.sh"
+  grep -q -- '--print-media-type' "${REPO_ROOT}/scripts/lib/report-pdf.sh"
+  grep -q 'pdf-row-start-2 { clear: left !important; }' "${REPO_ROOT}/scripts/lib/report-pdf.sh"
 }
 
 @test "generate_html_report: uses PDF-safe issues summary layout" {

@@ -79,6 +79,10 @@
     }
     .cards-4 .card-wrap { width: 25%; }
     .cards-5 .card-wrap { width: 20%; }
+    .cards-6 .card-wrap { width: 25%; }
+    .cards-4 .card-wrap:nth-child(4n + 1),
+    .cards-6 .card-wrap:nth-child(4n + 1) { clear: left; }
+    .cards-5 .card-wrap:nth-child(5n + 1) { clear: left; }
     .card {
       background: var(--color-card);
       border: 1px solid var(--color-border);
@@ -86,6 +90,7 @@
       padding: 16px;
       text-align: center;
       height: 100%;
+      min-height: 136px;
       page-break-inside: avoid;
       break-inside: avoid;
     }
@@ -281,6 +286,16 @@
       .cards-6 .card-wrap {
         width: 33.3333%;
       }
+
+      .cards-5 .card-wrap:nth-child(5n + 1),
+      .cards-6 .card-wrap:nth-child(4n + 1) {
+        clear: none;
+      }
+
+      .cards-5 .card-wrap:nth-child(3n + 1),
+      .cards-6 .card-wrap:nth-child(3n + 1) {
+        clear: left;
+      }
     }
 
     @media (max-width: 720px) {
@@ -290,12 +305,30 @@
       .summary-panel {
         width: 50%;
       }
+
+      .cards-4 .card-wrap:nth-child(4n + 1),
+      .cards-5 .card-wrap:nth-child(5n + 1),
+      .cards-5 .card-wrap:nth-child(3n + 1),
+      .cards-6 .card-wrap:nth-child(4n + 1),
+      .cards-6 .card-wrap:nth-child(3n + 1) {
+        clear: none;
+      }
+
+      .cards-4 .card-wrap:nth-child(2n + 1),
+      .cards-5 .card-wrap:nth-child(2n + 1),
+      .cards-6 .card-wrap:nth-child(2n + 1) {
+        clear: left;
+      }
     }
 
     @media (max-width: 520px) {
       .card-wrap,
       .summary-panel {
         width: 100%;
+      }
+
+      .card-wrap {
+        clear: left;
       }
     }
 
@@ -304,6 +337,11 @@
       .cards {
         margin-left: -6px;
         margin-right: -6px;
+      }
+      .cards-4 .card-wrap,
+      .cards-5 .card-wrap,
+      .cards-6 .card-wrap {
+        width: 25% !important;
       }
       .card-wrap,
       .summary-panel {
@@ -417,7 +455,7 @@
   <!-- Key Metrics -->
   <h2>Key Metrics</h2>
   <div class="cards cards-6">
-    <div class="card-wrap">
+    <div class="card-wrap pdf-row-start-2">
     <div class="card">
       <div class="card-label">Bugs</div>
       <div class="card-value">{{BUGS}}</div>
@@ -431,7 +469,7 @@
       <div class="card-sub">Security: <span class="rating rating-{{SEC_RATING}}">{{SEC_RATING}}</span></div>
     </div>
     </div>
-    <div class="card-wrap">
+    <div class="card-wrap pdf-row-start-2">
     <div class="card">
       <div class="card-label">Code Smells</div>
       <div class="card-value">{{SMELLS}}</div>
@@ -445,7 +483,7 @@
       <div class="card-sub">of {{LOC}} lines</div>
     </div>
     </div>
-    <div class="card-wrap">
+    <div class="card-wrap pdf-row-start-2">
     <div class="card">
       <div class="card-label">Duplications</div>
       <div class="card-value">{{DUPLICATION}}%</div>
@@ -464,7 +502,7 @@
   <!-- Security Hotspots -->
   <h2>Security Hotspots</h2>
   <div class="cards cards-4">
-    <div class="card-wrap">
+    <div class="card-wrap pdf-row-start-2">
     <div class="card">
       <div class="card-label">Total Hotspots</div>
       <div class="card-value">{{HOTSPOT_TOTAL}}</div>
@@ -476,7 +514,7 @@
       <div class="card-value" style="color: var(--color-warn);">{{HOTSPOT_TO_REVIEW}}</div>
     </div>
     </div>
-    <div class="card-wrap">
+    <div class="card-wrap pdf-row-start-2">
     <div class="card">
       <div class="card-label">Reviewed</div>
       <div class="card-value" style="color: var(--color-pass);">{{HOTSPOT_REVIEWED}}</div>
@@ -497,7 +535,7 @@
   <!-- New Code Period -->
   <h2>New Code Period</h2>
   <div class="cards cards-5">
-    <div class="card-wrap">
+    <div class="card-wrap pdf-row-start-2">
     <div class="card">
       <div class="card-label">New Bugs</div>
       <div class="card-value">{{NEW_BUGS}}</div>
@@ -509,7 +547,7 @@
       <div class="card-value">{{NEW_VULNS}}</div>
     </div>
     </div>
-    <div class="card-wrap">
+    <div class="card-wrap pdf-row-start-2">
     <div class="card">
       <div class="card-label">New Code Smells</div>
       <div class="card-value">{{NEW_SMELLS}}</div>
@@ -521,7 +559,7 @@
       <div class="card-value">{{NEW_COVERAGE}}%</div>
     </div>
     </div>
-    <div class="card-wrap">
+    <div class="card-wrap pdf-row-start-2">
     <div class="card">
       <div class="card-label">New Duplications</div>
       <div class="card-value">{{NEW_DUPLICATION}}%</div>

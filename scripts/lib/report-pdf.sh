@@ -20,6 +20,8 @@ source "${_REPORT_PDF_SCRIPT_DIR}/api.sh"
 generate_pdf_report() {
   local html_file="$1"
   local output_dir="$2"
+  local render_html="$html_file"
+  local temp_html
 
   # Check if wkhtmltopdf is available
   if ! command -v wkhtmltopdf &>/dev/null; then
@@ -39,10 +41,27 @@ generate_pdf_report() {
   local filepath="${output_dir}/${basename}.pdf"
   mkdir -p "$output_dir"
 
+  temp_html=$(mktemp "${TMPDIR:-/tmp}/sonar-report-pdf.XXXXXX.html")
+  trap 'rm -f "$temp_html"' RETURN
+
+  awk '
+    /<\/head>/ && !inserted {
+      print "  <style>"
+      print "    .cards .card-wrap { width: 50% !important; clear: none !important; }"
+      print "    .cards .card-wrap.pdf-row-start-2 { clear: left !important; }"
+      print "  </style>"
+      inserted=1
+    }
+    { print }
+  ' "$html_file" > "$temp_html"
+  render_html="$temp_html"
+
   wkhtmltopdf \
     --quiet \
     --page-size A4 \
     --orientation Portrait \
+    --print-media-type \
+    --viewport-size 1280x1024 \
     --margin-top 10mm \
     --margin-bottom 10mm \
     --margin-left 10mm \
@@ -53,7 +72,7 @@ generate_pdf_report() {
     --footer-center "Page [page] of [topage]" \
     --footer-font-size 8 \
     --footer-spacing 5 \
-    "$html_file" \
+    "$render_html" \
     "$filepath" 2>/dev/null || {
       log_error "wkhtmltopdf failed for ${html_file}"
       return 1
