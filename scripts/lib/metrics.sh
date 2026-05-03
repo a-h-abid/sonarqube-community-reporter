@@ -2,6 +2,10 @@
 # ==============================================================================
 # metrics.sh — Fetch SonarQube measures, quality gate, issues, and hotspots
 # ==============================================================================
+# Source guard — prevent multiple inclusions
+[[ -n "${_METRICS_SH_LOADED:-}" ]] && return 0
+_METRICS_SH_LOADED=1
+
 set -euo pipefail
 
 _METRICS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

@@ -68,6 +68,7 @@ ANALYSIS_ID="${ANALYSIS_ID:-}"
 
 WAIT_FOR_ANALYSIS=false
 FAIL_ON_GATE=false
+REQUESTED_FORMATS=()
 
 # ===========================================================================
 # CLI Argument Parsing
@@ -101,6 +102,80 @@ parse_args() {
   done
 }
 
+normalize_format() {
+  local fmt="$1"
+
+  fmt="${fmt//[[:space:]]/}"
+
+  case "$fmt" in
+    markdown) echo "md" ;;
+    *) echo "$fmt" ;;
+  esac
+}
+
+contains_value() {
+  local needle="$1"
+  shift
+
+  local item
+  for item in "$@"; do
+    [[ "$item" == "$needle" ]] && return 0
+  done
+
+  return 1
+}
+
+validate_report_formats() {
+  local raw_formats=()
+  local normalized_formats=()
+  local raw fmt
+  local errors=0
+
+  IFS=',' read -ra raw_formats <<< "$REPORT_FORMATS"
+
+  if [[ "${#raw_formats[@]}" -eq 0 ]]; then
+    log_error "At least one report format is required"
+    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods"
+    return 1
+  fi
+
+  for raw in "${raw_formats[@]}"; do
+    fmt=$(normalize_format "$raw")
+
+    if [[ -z "$fmt" ]]; then
+      log_error "Empty report format in '${REPORT_FORMATS}'"
+      errors=$((errors + 1))
+      continue
+    fi
+
+    case "$fmt" in
+      json|md|html|pdf|xlsx|ods)
+        if contains_value "$fmt" "${normalized_formats[@]}"; then
+          log_warn "Duplicate format '${raw}' requested — keeping one"
+          continue
+        fi
+        normalized_formats+=("$fmt")
+        ;;
+      *)
+        log_error "Unsupported report format: ${raw}"
+        errors=$((errors + 1))
+        ;;
+    esac
+  done
+
+  if [[ "$errors" -gt 0 ]]; then
+    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods"
+    return 1
+  fi
+
+  if [[ "${#normalized_formats[@]}" -eq 0 ]]; then
+    log_error "At least one valid report format is required"
+    return 1
+  fi
+
+  REQUESTED_FORMATS=("${normalized_formats[@]}")
+}
+
 # ===========================================================================
 # Validation
 # ===========================================================================
@@ -114,6 +189,10 @@ validate_params() {
 
   if [[ -z "$SONAR_PROJECT_KEY" ]]; then
     log_error "SONAR_PROJECT_KEY is required (use --project-key or set env var)"
+    errors=$((errors + 1))
+  fi
+
+  if ! validate_report_formats; then
     errors=$((errors + 1))
   fi
 
@@ -175,27 +254,30 @@ main() {
 
   # --- Step 4: Generate reports ---
   local generated_files=()
+  local skipped_formats=()
   local html_file=""
 
   mkdir -p "$REPORT_OUTPUT_DIR"
 
-  IFS=',' read -ra formats <<< "$REPORT_FORMATS"
-  for fmt in "${formats[@]}"; do
-    fmt=$(echo "$fmt" | tr -d ' ')
+  for fmt in "${REQUESTED_FORMATS[@]}"; do
     case "$fmt" in
       json)
         local f
         f=$(generate_json_report "$report_data_file" "$REPORT_OUTPUT_DIR")
         generated_files+=("$f")
         ;;
-      md|markdown)
+      md)
         local f
         f=$(generate_md_report "$report_data_file" "$REPORT_OUTPUT_DIR")
         generated_files+=("$f")
         ;;
       html)
-        html_file=$(generate_html_report "$report_data_file" "$REPORT_OUTPUT_DIR")
-        generated_files+=("$html_file")
+        if [[ -z "$html_file" ]]; then
+          html_file=$(generate_html_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+          generated_files+=("$html_file")
+        else
+          log_info "Reusing previously generated HTML report"
+        fi
         ;;
       pdf)
         # PDF needs HTML — generate it first if not already done
@@ -205,20 +287,29 @@ main() {
         fi
         local f
         f=$(generate_pdf_report "$html_file" "$REPORT_OUTPUT_DIR")
-        [[ -n "$f" ]] && generated_files+=("$f")
+        if [[ -n "$f" ]]; then
+          generated_files+=("$f")
+        else
+          skipped_formats+=("pdf")
+        fi
         ;;
       xlsx)
         local f
         f=$(generate_xlsx_report "$report_data_file" "$REPORT_OUTPUT_DIR")
-        [[ -n "$f" ]] && generated_files+=("$f")
+        if [[ -n "$f" ]]; then
+          generated_files+=("$f")
+        else
+          skipped_formats+=("xlsx")
+        fi
         ;;
       ods)
         local f
         f=$(generate_ods_report "$report_data_file" "$REPORT_OUTPUT_DIR")
-        [[ -n "$f" ]] && generated_files+=("$f")
-        ;;
-      *)
-        log_warn "Unknown format '${fmt}' — skipping"
+        if [[ -n "$f" ]]; then
+          generated_files+=("$f")
+        else
+          skipped_formats+=("ods")
+        fi
         ;;
     esac
   done
@@ -242,6 +333,10 @@ main() {
   for f in "${generated_files[@]}"; do
     echo "  → ${f}"
   done
+
+  if [[ "${#skipped_formats[@]}" -gt 0 ]]; then
+    log_warn "Skipped format(s): ${skipped_formats[*]}"
+  fi
   echo "────────────────────────────────────────────────────────────────"
   echo ""
 
@@ -254,4 +349,6 @@ main() {
   exit 0
 }
 
-main "$@"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

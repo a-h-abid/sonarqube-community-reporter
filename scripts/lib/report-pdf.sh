@@ -2,6 +2,10 @@
 # ==============================================================================
 # report-pdf.sh — Generate PDF report from HTML using wkhtmltopdf
 # ==============================================================================
+# Source guard — prevent multiple inclusions
+[[ -n "${_REPORT_PDF_SH_LOADED:-}" ]] && return 0
+_REPORT_PDF_SH_LOADED=1
+
 set -euo pipefail
 
 _REPORT_PDF_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

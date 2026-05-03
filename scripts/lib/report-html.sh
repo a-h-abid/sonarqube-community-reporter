@@ -2,6 +2,10 @@
 # ==============================================================================
 # report-html.sh — Generate styled HTML report from template
 # ==============================================================================
+# Source guard — prevent multiple inclusions
+[[ -n "${_REPORT_HTML_SH_LOADED:-}" ]] && return 0
+_REPORT_HTML_SH_LOADED=1
+
 set -euo pipefail
 
 _REPORT_HTML_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
