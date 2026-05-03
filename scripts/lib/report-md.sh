@@ -184,22 +184,11 @@ $(echo "$report_data" | jq -r '
 ## Issues Summary
 
 **Total Open Issues: ${total_issues}**
-
-### By Type
-
-| Type | Count |
-|------|-------|
-| 🐛 Bugs | ${issue_bugs} |
-| 🔓 Vulnerabilities | ${issue_vulns} |
-| 🔧 Code Smells | ${issue_smells} |
-
-### By Severity
-
 | Severity | Count |
 |----------|-------|
-| 🔴 Blocker | ${sev_blocker} |
-| 🟠 Critical | ${sev_critical} |
-| 🟡 Major | ${sev_major} |
+| ⛔ Blocker | ${sev_blocker} |
+| 🔴 Critical | ${sev_critical} |
+| 🟠 Major | ${sev_major} |
 | 🔵 Minor | ${sev_minor} |
 | ⚪ Info | ${sev_info} |
 
@@ -218,17 +207,27 @@ $(echo "$report_data" | jq -r '
 ## Security Hotspots Details
 
 $(echo "$report_data" | jq -r '
+  def escape_md_text:
+    gsub("<"; "&lt;") | gsub(">"; "&gt;");
+  def short_component:
+    (. // "") as $component |
+    ($component | split(":")) as $parts |
+    ($parts | last // "") as $path |
+    ($path | split("/")) as $segments |
+    if ($segments | length) > 3 then
+      ".../" + ($segments[-3:] | join("/"))
+    else
+      $path
+    end;
   if (.hotspots | length) > 0 then
-    "| # | Status | Risk | Rule | Component | Line | Message |\n|---|--------|------|------|-----------|------|---------|" +
     ([.hotspots | to_entries[]? |
-      "| " + ((.key + 1) | tostring) +
-      " | " + (.value.status // "?") +
-      " | " + (.value.vulnerabilityProbability // "N/A") +
-      " | " + (.value.rule // "") +
-      " | " + ((.value.component // "") | split(":") | last) +
-      " | " + ((.value.line // "") | tostring) +
-      " | " + ((.value.message // "") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\\|"; "\\\\|")) + " |"
-    ] | join("\n"))
+      "### " + ((.key + 1) | tostring) + ". " + (.value.status // "?") + " hotspot\n" +
+      "- Risk: " + ((.value.vulnerabilityProbability // "N/A") | escape_md_text) + "\n" +
+      "- Component: " + ((.value.component // "") | short_component | escape_md_text) + "\n" +
+      "- Line: " + ((.value.line // "N/A") | tostring) + "\n" +
+      "- Rule: " + ((.value.rule // "") | escape_md_text) + "\n" +
+      "- Message: " + ((.value.message // "") | escape_md_text)
+    ] | join("\n\n"))
   else
     "_No security hotspots found._"
   end
@@ -239,18 +238,27 @@ $(echo "$report_data" | jq -r '
 ## Issues Details
 
 $(echo "$report_data" | jq -r '
+  def escape_md_text:
+    gsub("<"; "&lt;") | gsub(">"; "&gt;");
+  def short_component:
+    (. // "") as $component |
+    ($component | split(":")) as $parts |
+    ($parts | last // "") as $path |
+    ($path | split("/")) as $segments |
+    if ($segments | length) > 3 then
+      ".../" + ($segments[-3:] | join("/"))
+    else
+      $path
+    end;
   if (.issues | length) > 0 then
-    "| # | Severity | Type | Rule | Component | Line | Message | Effort |\n|---|----------|------|------|-----------|------|---------|--------|\n" +
     ([.issues | to_entries[]? |
-      "| " + ((.key + 1) | tostring) +
-      " | " + (.value.severity // "?") +
-      " | " + (.value.type // "?") +
-      " | " + (.value.rule // "") +
-      " | " + ((.value.component // "") | split(":") | last) +
-      " | " + ((.value.line // "") | tostring) +
-      " | " + ((.value.message // "") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\\|"; "\\\\|")) +
-      " | " + (.value.effort // "N/A") + " |"
-    ] | join("\n"))
+      "### " + ((.key + 1) | tostring) + ". " + (.value.severity // "?") + " " + (.value.type // "?") + "\n" +
+      "- Component: " + ((.value.component // "") | short_component | escape_md_text) + "\n" +
+      "- Line: " + ((.value.line // "N/A") | tostring) + "\n" +
+      "- Effort: " + ((.value.effort // "N/A") | escape_md_text) + "\n" +
+      "- Rule: " + ((.value.rule // "") | escape_md_text) + "\n" +
+      "- Message: " + ((.value.message // "") | escape_md_text)
+    ] | join("\n\n"))
   else
     "_No open issues found._"
   end

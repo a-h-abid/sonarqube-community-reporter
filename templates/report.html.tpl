@@ -136,7 +136,6 @@
     tr:nth-child(even) { background: #f8f9fa; }
 
     .issues-table {
-      table-layout: fixed;
       min-width: 100%;
       font-size: 0.9rem;
     }
@@ -146,17 +145,57 @@
       overflow-wrap: anywhere;
       word-break: break-word;
     }
-    .issues-table th:nth-child(1), .issues-table td:nth-child(1) { width: 4%; }
-    .issues-table th:nth-child(2), .issues-table td:nth-child(2) { width: 10%; }
-    .issues-table th:nth-child(3), .issues-table td:nth-child(3) { width: 10%; }
-    .issues-table th:nth-child(4), .issues-table td:nth-child(4) { width: 12%; }
-    .issues-table th:nth-child(5), .issues-table td:nth-child(5) { width: 16%; }
-    .issues-table th:nth-child(6), .issues-table td:nth-child(6) { width: 6%; }
-    .issues-table th:nth-child(7), .issues-table td:nth-child(7) { width: 32%; }
-    .issues-table th:nth-child(8), .issues-table td:nth-child(8) { width: 10%; }
+    .issues-table thead th:nth-child(1) { width: 5%; }
+    .issues-table thead th:nth-child(2) { width: 14%; }
+    .issues-table thead th:nth-child(3) { width: 14%; }
+    .issues-table thead th:nth-child(4) { width: 45%; }
+    .issues-table thead th:nth-child(5) { width: 8%; }
+    .issues-table thead th:nth-child(6) { width: 14%; }
+
+    .issue-entry {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .issue-summary-row td {
+      background: #fff;
+      border-bottom: none;
+      font-weight: 600;
+    }
+    .issue-detail-row td {
+      padding-top: 0;
+      background: #fcfcfd;
+    }
+    .issue-detail {
+      border-top: 1px solid var(--color-border);
+      padding-top: 10px;
+    }
+    .issue-detail-line + .issue-detail-line {
+      margin-top: 8px;
+    }
+    .issue-detail-label {
+      display: inline-block;
+      min-width: 74px;
+      margin-right: 8px;
+      color: var(--color-muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .issue-detail-text,
+    .issue-component-path {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .issue-component-path {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.84rem;
+    }
+    .issue-index {
+      white-space: nowrap;
+    }
 
     .hotspots-table {
-      table-layout: fixed;
       min-width: 100%;
       font-size: 0.9rem;
     }
@@ -166,13 +205,54 @@
       overflow-wrap: anywhere;
       word-break: break-word;
     }
-    .hotspots-table th:nth-child(1), .hotspots-table td:nth-child(1) { width: 4%; }
-    .hotspots-table th:nth-child(2), .hotspots-table td:nth-child(2) { width: 14%; }
-    .hotspots-table th:nth-child(3), .hotspots-table td:nth-child(3) { width: 10%; }
-    .hotspots-table th:nth-child(4), .hotspots-table td:nth-child(4) { width: 14%; }
-    .hotspots-table th:nth-child(5), .hotspots-table td:nth-child(5) { width: 20%; }
-    .hotspots-table th:nth-child(6), .hotspots-table td:nth-child(6) { width: 6%; }
-    .hotspots-table th:nth-child(7), .hotspots-table td:nth-child(7) { width: 32%; }
+    .hotspots-table thead th:nth-child(1) { width: 5%; }
+    .hotspots-table thead th:nth-child(2) { width: 18%; }
+    .hotspots-table thead th:nth-child(3) { width: 15%; }
+    .hotspots-table thead th:nth-child(4) { width: 50%; }
+    .hotspots-table thead th:nth-child(5) { width: 12%; }
+
+    .hotspot-entry {
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .hotspot-summary-row td {
+      background: #fff;
+      border-bottom: none;
+      font-weight: 600;
+    }
+    .hotspot-detail-row td {
+      padding-top: 0;
+      background: #fcfcfd;
+    }
+    .hotspot-detail {
+      border-top: 1px solid var(--color-border);
+      padding-top: 10px;
+    }
+    .hotspot-detail-line + .hotspot-detail-line {
+      margin-top: 8px;
+    }
+    .hotspot-detail-label {
+      display: inline-block;
+      min-width: 74px;
+      margin-right: 8px;
+      color: var(--color-muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+    }
+    .hotspot-detail-text,
+    .hotspot-component-path {
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .hotspot-component-path {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.84rem;
+    }
+    .hotspot-index {
+      white-space: nowrap;
+    }
 
     /* Severity badges */
     .sev { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; color: #fff; }
@@ -231,9 +311,80 @@
         padding-right: 6px;
       }
       .table-shell { overflow: visible; }
-      .issues-table { font-size: 0.78rem; }
+      .issues-table { font-size: 0.84rem; }
+      .hotspots-table { font-size: 0.84rem; }
       .issues-table th,
       .issues-table td { padding: 8px 10px; }
+      .hotspots-table th,
+      .hotspots-table td { padding: 8px 10px; }
+      .issues-table,
+      .hotspots-table,
+      .issues-table thead,
+      .hotspots-table thead,
+      .issues-table tbody,
+      .hotspots-table tbody,
+      .issues-table tr,
+      .hotspots-table tr,
+      .issues-table td,
+      .hotspots-table td,
+      .issues-table th,
+      .hotspots-table th {
+        display: block;
+        width: 100%;
+        box-sizing: border-box;
+      }
+      .issues-table thead,
+      .hotspots-table thead {
+        margin-bottom: 8px;
+      }
+      .issues-table thead tr,
+      .hotspots-table thead tr {
+        display: table;
+        table-layout: fixed;
+      }
+      .issues-table thead th,
+      .hotspots-table thead th {
+        display: table-cell;
+      }
+      .issue-entry,
+      .hotspot-entry {
+        display: block;
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+        margin-bottom: 8px;
+      }
+      .issue-summary-row,
+      .hotspot-summary-row {
+        display: table;
+        table-layout: fixed;
+      }
+      .issue-summary-row td,
+      .hotspot-summary-row td {
+        display: table-cell;
+      }
+      .issue-detail-row,
+      .hotspot-detail-row,
+      .issue-detail-row td,
+      .hotspot-detail-row td {
+        display: block;
+      }
+      .issue-summary-row td:nth-child(1) { width: 5%; }
+      .issue-summary-row td:nth-child(2) { width: 14%; }
+      .issue-summary-row td:nth-child(3) { width: 14%; }
+      .issue-summary-row td:nth-child(4) { width: 45%; }
+      .issue-summary-row td:nth-child(5) { width: 8%; }
+      .issue-summary-row td:nth-child(6) { width: 14%; }
+      .hotspot-summary-row td:nth-child(1) { width: 5%; }
+      .hotspot-summary-row td:nth-child(2) { width: 18%; }
+      .hotspot-summary-row td:nth-child(3) { width: 15%; }
+      .hotspot-summary-row td:nth-child(4) { width: 50%; }
+      .hotspot-summary-row td:nth-child(5) { width: 12%; }
+      .issue-detail-label {
+        min-width: 64px;
+      }
+      .hotspot-detail-label {
+        min-width: 64px;
+      }
     }
   </style>
 </head>

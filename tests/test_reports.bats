@@ -277,8 +277,10 @@ teardown() {
   [ "$status" -eq 0 ]
   local filepath="${lines[-1]}"
   grep -q "Security Hotspots Details" "$filepath"
-  grep -q "TO_REVIEW" "$filepath"
-  grep -q "REVIEWED" "$filepath"
+  grep -q '^### 1\. TO_REVIEW hotspot$' "$filepath"
+  grep -q '^### 2\. REVIEWED hotspot$' "$filepath"
+  grep -q '^- Risk: HIGH$' "$filepath"
+  grep -q '^- Component: src/Db.java$' "$filepath"
   grep -q "Unsanitized SQL query" "$filepath"
 }
 
@@ -286,6 +288,9 @@ teardown() {
   run generate_md_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
   [ "$status" -eq 0 ]
   local filepath="${lines[-1]}"
+  grep -q '^### 1\. CRITICAL BUG$' "$filepath"
+  grep -q '^- Component: src/Main.java$' "$filepath"
+  grep -q '^- Rule: java:S2259$' "$filepath"
   grep -q "Null pointer dereference" "$filepath"
 }
 
@@ -398,19 +403,75 @@ teardown() {
   local filepath="${lines[-1]}"
   grep -q "Security Hotspots Details" "$filepath"
   grep -q 'class="hotspots-table"' "$filepath"
+  grep -q 'hotspots-shell' "$filepath"
+  grep -q 'class="hotspot-entry"' "$filepath"
+  grep -q 'class="hotspot-summary-row"' "$filepath"
+  grep -q 'class="hotspot-detail-row"' "$filepath"
   grep -q "TO_REVIEW" "$filepath"
   grep -q "REVIEWED" "$filepath"
   grep -q "Unsanitized SQL query" "$filepath"
 }
 
-@test "generate_html_report: issues table stays inside the report layout" {
+@test "generate_html_report: shortens visible component paths in hotspots" {
+  local tmp_hotspot_component
+  tmp_hotspot_component=$(mktemp)
+  echo "$_REPORT_DATA" | jq '
+    .hotspots = [
+      {
+        "key": "HS3", "status": "TO_REVIEW",
+        "vulnerabilityProbability": "MEDIUM",
+        "securityCategory": "xss",
+        "message": "Long path should be shortened in the hotspot summary row",
+        "component": "my-project:src/main/java/com/example/deep/repository/DbAccess.java",
+        "line": 19,
+        "rule": "java:S5131",
+        "author": "dev3",
+        "creationDate": "2024-01-15T10:00:00+0000",
+        "updateDate": "2024-01-15T10:00:00+0000"
+      }
+    ]
+  ' > "$tmp_hotspot_component"
+  run generate_html_report "$tmp_hotspot_component" "$_OUTPUT_DIR"
+  rm -f "$tmp_hotspot_component"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q 'title="my-project:src/main/java/com/example/deep/repository/DbAccess.java"' "$filepath"
+  grep -q '\.\.\./deep/repository/DbAccess.java' "$filepath"
+}
+
+@test "generate_html_report: issues details use summary and detail rows" {
   run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
   [ "$status" -eq 0 ]
   local filepath="${lines[-1]}"
-  grep -q 'class="table-shell"' "$filepath"
+  grep -q 'table-shell issues-shell' "$filepath"
+  grep -q 'issues-shell' "$filepath"
   grep -q 'class="issues-table"' "$filepath"
-  grep -q 'overflow-x: auto;' "$filepath"
-  grep -q 'table-layout: fixed;' "$filepath"
+  grep -q 'class="issue-entry"' "$filepath"
+  grep -q 'class="issue-summary-row"' "$filepath"
+  grep -q 'class="issue-detail-row"' "$filepath"
+}
+
+@test "generate_html_report: shortens visible component paths in issues" {
+  local tmp_component
+  tmp_component=$(mktemp)
+  echo "$_REPORT_DATA" | jq '
+    .issues = [
+      {
+        "key": "AX2", "severity": "MAJOR", "type": "CODE_SMELL",
+        "message": "Long path should be shortened in the summary row",
+        "component": "my-project:src/main/java/com/example/deep/service/MainService.java",
+        "line": 64,
+        "rule": "java:S1192", "effort": "8min",
+        "creationDate": "2024-01-15T10:00:00+0000"
+      }
+    ]
+  ' > "$tmp_component"
+  run generate_html_report "$tmp_component" "$_OUTPUT_DIR"
+  rm -f "$tmp_component"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q 'title="my-project:src/main/java/com/example/deep/service/MainService.java"' "$filepath"
+  grep -q '\.\.\./deep/service/MainService.java' "$filepath"
 }
 
 @test "generate_html_report: uses PDF-safe card layout wrappers" {
