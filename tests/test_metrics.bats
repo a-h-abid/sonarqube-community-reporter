@@ -329,6 +329,64 @@ setup() {
 }
 
 # ===========================================================================
+# fetch_all_hotspots
+# ===========================================================================
+
+@test "fetch_all_hotspots: returns both to-review and reviewed hotspots" {
+  export _HS_LIST_CTR
+  _HS_LIST_CTR=$(counter_file_new)
+
+  sonar_api_paginated() {
+    local n
+    n=$(counter_file_increment "$_HS_LIST_CTR")
+    if [[ "$n" -eq 1 ]]; then
+      echo '[{"key":"HS1","status":"TO_REVIEW","vulnerabilityProbability":"HIGH","securityCategory":"sql-injection","message":"Review this hotspot","component":"my-project:src/Main.java","line":42,"ruleKey":"java:S3649","creationDate":"2024-01-01T10:00:00+0000","updateDate":"2024-01-01T10:00:00+0000"}]'
+    else
+      echo '[{"key":"HS2","status":"REVIEWED","vulnerabilityProbability":"MEDIUM","securityCategory":"xss","message":"Reviewed hotspot","component":"my-project:src/Web.java","line":7,"ruleKey":"java:S5131","creationDate":"2024-01-02T10:00:00+0000","updateDate":"2024-01-03T10:00:00+0000"}]'
+    fi
+  }
+  export -f sonar_api_paginated counter_file_increment
+
+  run fetch_all_hotspots
+  rm -f "$_HS_LIST_CTR"
+  [ "$status" -eq 0 ]
+  count=$(echo "$output" | jq 'length')
+  [ "$count" -eq 2 ]
+}
+
+@test "fetch_all_hotspots: preserves review status and rule key" {
+  export _HS_LIST_CTR2
+  _HS_LIST_CTR2=$(counter_file_new)
+
+  sonar_api_paginated() {
+    local n
+    n=$(counter_file_increment "$_HS_LIST_CTR2")
+    if [[ "$n" -eq 1 ]]; then
+      echo '[{"key":"HS1","status":"TO_REVIEW","message":"Review this hotspot","component":"my-project:src/Main.java","line":42,"ruleKey":"java:S3649"}]'
+    else
+      echo '[{"key":"HS2","status":"REVIEWED","message":"Reviewed hotspot","component":"my-project:src/Web.java","line":7,"ruleKey":"java:S5131"}]'
+    fi
+  }
+  export -f sonar_api_paginated counter_file_increment
+
+  run fetch_all_hotspots
+  rm -f "$_HS_LIST_CTR2"
+  [ "$status" -eq 0 ]
+  first_status=$(echo "$output" | jq -r '.[0].status')
+  second_rule=$(echo "$output" | jq -r '.[1].rule')
+  [ "$first_status" = "TO_REVIEW" ]
+  [ "$second_rule" = "java:S5131" ]
+}
+
+@test "fetch_all_hotspots: fails when paginated call fails" {
+  sonar_api_paginated() { return 1; }
+  export -f sonar_api_paginated
+
+  run fetch_all_hotspots
+  [ "$status" -ne 0 ]
+}
+
+# ===========================================================================
 # fetch_last_analysis_date
 # ===========================================================================
 
@@ -370,11 +428,12 @@ setup() {
   fetch_issues_summary()   { echo '{"total":18,"byType":{"BUG":2},"bySeverity":{"CRITICAL":2}}'; }
   fetch_hotspots_summary() { echo '{"total":10,"toReview":3,"reviewed":7}'; }
   fetch_all_issues()       { echo '[{"key":"AXyz111","severity":"CRITICAL","type":"BUG","message":"test","component":"my-project:Main.java","line":1,"rule":"java:S1","effort":"5min","creationDate":"2024-01-01"}]'; }
+  fetch_all_hotspots()     { echo '[{"key":"HS1","status":"TO_REVIEW","message":"hotspot","component":"my-project:Main.java","line":1,"rule":"java:S3649"}]'; }
   fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
   # Suppress log output so $output contains only the JSON result
   log_info() { :; }
   log_ok()   { :; }
-  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_last_analysis_date log_info log_ok
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok
 
   run fetch_all_metrics
   [ "$status" -eq 0 ]
@@ -385,6 +444,7 @@ setup() {
   has_issues=$(echo "$output" | jq 'has("issuesSummary")')
   has_hotspots=$(echo "$output" | jq 'has("hotspotsSummary")')
   has_issue_list=$(echo "$output" | jq 'has("issues")')
+  has_hotspot_list=$(echo "$output" | jq 'has("hotspots")')
 
   [ "$has_metadata"   = "true" ]
   [ "$has_gate"       = "true" ]
@@ -392,6 +452,7 @@ setup() {
   [ "$has_issues"     = "true" ]
   [ "$has_hotspots"   = "true" ]
   [ "$has_issue_list" = "true" ]
+  [ "$has_hotspot_list" = "true" ]
 }
 
 @test "fetch_all_metrics: metadata contains projectKey" {
@@ -400,10 +461,11 @@ setup() {
   fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
   fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
   fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
   fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
   log_info() { :; }
   log_ok()   { :; }
-  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_last_analysis_date log_info log_ok
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok
 
   run fetch_all_metrics
   [ "$status" -eq 0 ]
@@ -417,10 +479,11 @@ setup() {
   fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
   fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
   fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
   fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
   log_info() { :; }
   log_ok()   { :; }
-  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_last_analysis_date log_info log_ok
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok
 
   run fetch_all_metrics
   [ "$status" -eq 0 ]
@@ -434,11 +497,12 @@ setup() {
   fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
   fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
   fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
   fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
   log_info() { :; }
   log_ok()   { :; }
   log_error() { :; }
-  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_last_analysis_date log_info log_ok log_error
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok log_error
 
   run fetch_all_metrics
   [ "$status" -ne 0 ]
@@ -450,11 +514,12 @@ setup() {
   fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
   fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
   fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
   fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
   log_info() { :; }
   log_ok()   { :; }
   log_error() { :; }
-  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_last_analysis_date log_info log_ok log_error
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok log_error
 
   run fetch_all_metrics
   [ "$status" -ne 0 ]

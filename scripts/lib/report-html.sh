@@ -112,6 +112,26 @@ generate_html_report() {
   hotspot_to_review=$(echo "$report_data" | jq -r '.hotspotsSummary.toReview // 0')
   hotspot_reviewed=$(echo "$report_data" | jq -r '.hotspotsSummary.reviewed // 0')
 
+  # Hotspots details table
+  local hotspots_table
+  hotspots_table=$(echo "$report_data" | jq -r '
+    if (.hotspots | length) > 0 then
+      "<div class=\"table-shell\"><table class=\"hotspots-table\"><tr><th>#</th><th>Status</th><th>Risk</th><th>Rule</th><th>Component</th><th>Line</th><th>Message</th></tr>" +
+      ([.hotspots | to_entries[]? |
+        "<tr><td>" + ((.key + 1) | tostring) + "</td>" +
+        "<td><span class=\"status-badge status-" + ((.value.status // "unknown") | ascii_downcase | gsub("_"; "-")) + "\">" + (.value.status // "?") + "</span></td>" +
+        "<td>" + (.value.vulnerabilityProbability // "N/A") + "</td>" +
+        "<td>" + (.value.rule // "") + "</td>" +
+        "<td>" + ((.value.component // "") | split(":") | last) + "</td>" +
+        "<td>" + ((.value.line // "") | tostring) + "</td>" +
+        "<td>" + ((.value.message // "") | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")) + "</td></tr>"
+      ] | join("")) +
+      "</table></div>"
+    else
+      "<p><em>No security hotspots found.</em></p>"
+    end
+  ')
+
   # Issues details table
   local issues_table
   issues_table=$(echo "$report_data" | jq -r '
@@ -193,6 +213,22 @@ generate_html_report() {
   # Replace conditions table
   printf '%s' "$qg_conditions_table" > "${tmpfile}.rep"
   awk -v ph="{{QG_CONDITIONS_TABLE}}" -v cf="${tmpfile}.rep" '
+    index($0, ph) {
+      n = index($0, ph)
+      prefix = substr($0, 1, n - 1)
+      suffix = substr($0, n + length(ph))
+      printf "%s", prefix
+      while ((getline line < cf) > 0) printf "%s", line
+      close(cf)
+      printf "%s\n", suffix
+      next
+    }
+    { print }
+  ' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+
+  # Replace hotspots details table
+  printf '%s' "$hotspots_table" > "${tmpfile}.rep"
+  awk -v ph="{{HOTSPOTS_TABLE}}" -v cf="${tmpfile}.rep" '
     index($0, ph) {
       n = index($0, ph)
       prefix = substr($0, 1, n - 1)

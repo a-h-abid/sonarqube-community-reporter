@@ -74,6 +74,34 @@ _REPORT_DATA='{
   "hotspotsSummary": {
     "total": 10, "toReview": 3, "reviewed": 7
   },
+  "hotspots": [
+    {
+      "key": "HS1",
+      "status": "TO_REVIEW",
+      "vulnerabilityProbability": "HIGH",
+      "securityCategory": "sql-injection",
+      "message": "Unsanitized SQL query",
+      "component": "my-project:src/Db.java",
+      "line": 21,
+      "rule": "java:S3649",
+      "author": "dev1",
+      "creationDate": "2024-01-15T09:00:00+0000",
+      "updateDate": "2024-01-15T09:00:00+0000"
+    },
+    {
+      "key": "HS2",
+      "status": "REVIEWED",
+      "vulnerabilityProbability": "MEDIUM",
+      "securityCategory": "xss",
+      "message": "Template output needs review",
+      "component": "my-project:src/Web.java",
+      "line": 8,
+      "rule": "java:S5131",
+      "author": "dev2",
+      "creationDate": "2024-01-16T09:00:00+0000",
+      "updateDate": "2024-01-16T12:00:00+0000"
+    }
+  ],
   "issues": [
     {
       "key":          "AXyz111",
@@ -244,6 +272,16 @@ teardown() {
   grep -qi "hotspot" "$filepath"
 }
 
+@test "generate_md_report: report lists hotspot details with review status" {
+  run generate_md_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "Security Hotspots Details" "$filepath"
+  grep -q "TO_REVIEW" "$filepath"
+  grep -q "REVIEWED" "$filepath"
+  grep -q "Unsanitized SQL query" "$filepath"
+}
+
 @test "generate_md_report: report contains issues details" {
   run generate_md_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
   [ "$status" -eq 0 ]
@@ -354,6 +392,17 @@ teardown() {
   grep -q "Null pointer dereference" "$filepath"
 }
 
+@test "generate_html_report: contains hotspot details table with statuses" {
+  run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "Security Hotspots Details" "$filepath"
+  grep -q 'class="hotspots-table"' "$filepath"
+  grep -q "TO_REVIEW" "$filepath"
+  grep -q "REVIEWED" "$filepath"
+  grep -q "Unsanitized SQL query" "$filepath"
+}
+
 @test "generate_html_report: issues table stays inside the report layout" {
   run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
   [ "$status" -eq 0 ]
@@ -434,6 +483,18 @@ teardown() {
   rm -f "$issues_csv"
 }
 
+@test "write_hotspots_csv: includes hotspot detail columns and review status" {
+  local hotspots_csv
+  hotspots_csv=$(mktemp)
+  run write_hotspots_csv "$_REPORT_DATA_FILE" "$hotspots_csv"
+  [ "$status" -eq 0 ]
+
+  grep -q '"Key","Status","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"' "$hotspots_csv"
+  grep -q '"HS1","TO_REVIEW","HIGH","java:S3649","my-project:src/Db.java","21","Unsanitized SQL query","sql-injection","dev1","2024-01-15T09:00:00+0000","2024-01-15T09:00:00+0000"' "$hotspots_csv"
+
+  rm -f "$hotspots_csv"
+}
+
 # ===========================================================================
 # generate_xlsx_report
 # ===========================================================================
@@ -458,7 +519,7 @@ teardown() {
   [[ "${lines[-1]}" == *.xlsx ]]
 }
 
-@test "generate_xlsx_report: contains required two sheets" {
+@test "generate_xlsx_report: contains required three sheets" {
   if ! command -v ssconvert &>/dev/null || ! command -v unzip &>/dev/null; then
     skip "ssconvert or unzip is not installed"
   fi
@@ -470,12 +531,13 @@ teardown() {
   local workbook_xml
   workbook_xml=$(unzip -p "$filepath" xl/workbook.xml)
 
-  [[ "$workbook_xml" == *'name="Overall Summary"'* ]]
-  [[ "$workbook_xml" == *'name="Issues Details"'* ]]
+  [[ "$workbook_xml" == *'name="Overall Summary.csv"'* ]]
+  [[ "$workbook_xml" == *'name="Issues Details.csv"'* ]]
+  [[ "$workbook_xml" == *'name="Hotspots Details.csv"'* ]]
 
   local sheet_count
-  sheet_count=$(echo "$workbook_xml" | grep -o '<sheet ' | wc -l)
-  [ "$sheet_count" -eq 2 ]
+  sheet_count=$(echo "$workbook_xml" | grep -o 'name="[^"]*\.csv"' | wc -l)
+  [ "$sheet_count" -eq 3 ]
 }
 
 @test "generate_xlsx_report: gracefully skips when ssconvert is unavailable" {
@@ -508,7 +570,7 @@ teardown() {
   [[ "${lines[-1]}" == *.ods ]]
 }
 
-@test "generate_ods_report: contains required two sheets" {
+@test "generate_ods_report: contains required three sheets" {
   if ! command -v ssconvert &>/dev/null || ! command -v unzip &>/dev/null; then
     skip "ssconvert or unzip is not installed"
   fi
@@ -520,12 +582,13 @@ teardown() {
   local content_xml
   content_xml=$(unzip -p "$filepath" content.xml)
 
-  [[ "$content_xml" == *'table:name="Overall Summary"'* ]]
-  [[ "$content_xml" == *'table:name="Issues Details"'* ]]
+  [[ "$content_xml" == *'table:name="Overall Summary.csv"'* ]]
+  [[ "$content_xml" == *'table:name="Issues Details.csv"'* ]]
+  [[ "$content_xml" == *'table:name="Hotspots Details.csv"'* ]]
 
   local sheet_count
-  sheet_count=$(echo "$content_xml" | grep -o 'table:table table:name=' | wc -l)
-  [ "$sheet_count" -eq 2 ]
+  sheet_count=$(echo "$content_xml" | grep -o 'table:name="[^"]*\.csv"' | wc -l)
+  [ "$sheet_count" -eq 3 ]
 }
 
 @test "generate_ods_report: gracefully skips when ssconvert is unavailable" {

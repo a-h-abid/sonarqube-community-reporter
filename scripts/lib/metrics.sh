@@ -154,6 +154,44 @@ fetch_all_issues() {
 }
 
 # ---------------------------------------------------------------------------
+# fetch_all_hotspots
+#   Fetches all security hotspots for both review states.
+#   Output: JSON array of hotspot objects.
+# ---------------------------------------------------------------------------
+fetch_all_hotspots() {
+  local project_key="${SONAR_PROJECT_KEY}"
+
+  local base_params=("projectKey=${project_key}")
+  [[ -n "${SONAR_BRANCH:-}" ]] && base_params+=("branch=${SONAR_BRANCH}")
+
+  local to_review_params=("${base_params[@]}" "status=TO_REVIEW")
+  local reviewed_params=("${base_params[@]}" "status=REVIEWED")
+
+  local to_review_hotspots
+  to_review_hotspots=$(sonar_api_paginated "hotspots/search" ".hotspots" 20 "${to_review_params[@]}") || return 1
+
+  local reviewed_hotspots
+  reviewed_hotspots=$(sonar_api_paginated "hotspots/search" ".hotspots" 20 "${reviewed_params[@]}") || return 1
+
+  {
+    echo "$to_review_hotspots"
+    echo "$reviewed_hotspots"
+  } | jq -s 'add // [] | map({
+    key: .key,
+    status: .status,
+    vulnerabilityProbability: (.vulnerabilityProbability // .probability // ""),
+    securityCategory: (.securityCategory // ""),
+    message: (.message // .vulnerabilityDescription // ""),
+    component: .component,
+    line: .line,
+    rule: (.ruleKey // .rule // ""),
+    author: (.author // ""),
+    creationDate: (.creationDate // ""),
+    updateDate: (.updateDate // "")
+  })'
+}
+
+# ---------------------------------------------------------------------------
 # fetch_last_analysis_date
 #   Fetches the latest analysis timestamp for the project.
 #   Output: ISO-8601 timestamp string, or empty when unavailable.
@@ -200,6 +238,11 @@ fetch_all_metrics() {
   all_issues=$(fetch_all_issues) || { log_error "Failed to fetch issues"; return 1; }
   log_ok "Issues fetched"
 
+  log_info "Fetching security hotspot details ..."
+  local all_hotspots
+  all_hotspots=$(fetch_all_hotspots) || { log_error "Failed to fetch hotspot details"; return 1; }
+  log_ok "Hotspot details fetched"
+
   local last_analysis_date=""
   log_info "Fetching last analysis date ..."
   if last_analysis_date=$(fetch_last_analysis_date); then
@@ -225,6 +268,7 @@ fetch_all_metrics() {
     echo "$issues_summary"
     echo "$hotspots_summary"
     echo "$all_issues"
+    echo "$all_hotspots"
   } | jq -s \
     --arg projectKey "${SONAR_PROJECT_KEY}" \
     --arg branch "${SONAR_BRANCH:-main}" \
@@ -246,6 +290,7 @@ fetch_all_metrics() {
       measures: .[1].measures,
       issuesSummary: .[2],
       hotspotsSummary: .[3],
-      issues: .[4]
+      issues: .[4],
+      hotspots: .[5]
     }'
 }

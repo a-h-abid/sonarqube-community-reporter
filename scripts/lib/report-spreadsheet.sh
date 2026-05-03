@@ -85,10 +85,42 @@ write_issues_csv() {
 }
 
 # ---------------------------------------------------------------------------
+# write_hotspots_csv <report_data_file> <hotspots_csv>
+#   Writes all fetched hotspot rows for the "Hotspots Details" sheet.
+# ---------------------------------------------------------------------------
+write_hotspots_csv() {
+  local report_data_file="$1"
+  local hotspots_csv="$2"
+
+  jq -r '
+    ["Key","Status","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"],
+    (
+      .hotspots // []
+      | .[]
+      | [
+          (.key // ""),
+          (.status // ""),
+          (.vulnerabilityProbability // ""),
+          (.rule // ""),
+          (.component // ""),
+          ((.line // "") | tostring),
+          (.message // ""),
+          (.securityCategory // ""),
+          (.author // ""),
+          (.creationDate // ""),
+          (.updateDate // "")
+        ]
+    )
+    | @csv
+  ' "$report_data_file" > "$hotspots_csv" || return 1
+}
+
+# ---------------------------------------------------------------------------
 # generate_spreadsheet_report <report_data_file> <output_dir> <extension>
-#   Creates spreadsheet with exactly two sheets:
+#   Creates spreadsheet with exactly three sheets:
 #   - Overall Summary
 #   - Issues Details
+#   - Hotspots Details
 # ---------------------------------------------------------------------------
 generate_spreadsheet_report() {
   local report_data_file="$1"
@@ -117,6 +149,7 @@ generate_spreadsheet_report() {
 
   local summary_csv="${tmpdir}/Overall Summary.csv"
   local issues_csv="${tmpdir}/Issues Details.csv"
+  local hotspots_csv="${tmpdir}/Hotspots Details.csv"
 
   write_summary_csv "$report_data_file" "$summary_csv" || {
     log_error "Failed to prepare summary sheet data"
@@ -128,7 +161,12 @@ generate_spreadsheet_report() {
     return 1
   }
 
-  "$ssconvert_bin" --merge-to="$filepath" "$summary_csv" "$issues_csv" >/dev/null 2>&1 || {
+  write_hotspots_csv "$report_data_file" "$hotspots_csv" || {
+    log_error "Failed to prepare hotspots sheet data"
+    return 1
+  }
+
+  "$ssconvert_bin" --merge-to="$filepath" "$summary_csv" "$issues_csv" "$hotspots_csv" >/dev/null 2>&1 || {
     log_error "${ssconvert_bin} failed to generate ${extension^^} report"
     return 1
   }

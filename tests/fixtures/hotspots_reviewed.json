@@ -1,4 +1,17 @@
 {
   "paging": { "total": 7, "pageIndex": 1, "pageSize": 1 },
-  "hotspots": []
+  "hotspots": [
+    {
+      "key": "HS2",
+      "status": "REVIEWED",
+      "vulnerabilityProbability": "MEDIUM",
+      "securityCategory": "xss",
+      "message": "Template output needs review",
+      "component": "my-project:src/Web.java",
+      "line": 8,
+      "ruleKey": "java:S5131",
+      "creationDate": "2024-01-16T09:00:00+0000",
+      "updateDate": "2024-01-16T12:00:00+0000"
+    }
+  ]
 }

@@ -155,6 +155,25 @@
     .issues-table th:nth-child(7), .issues-table td:nth-child(7) { width: 32%; }
     .issues-table th:nth-child(8), .issues-table td:nth-child(8) { width: 10%; }
 
+    .hotspots-table {
+      table-layout: fixed;
+      min-width: 100%;
+      font-size: 0.9rem;
+    }
+    .hotspots-table th,
+    .hotspots-table td {
+      vertical-align: top;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .hotspots-table th:nth-child(1), .hotspots-table td:nth-child(1) { width: 4%; }
+    .hotspots-table th:nth-child(2), .hotspots-table td:nth-child(2) { width: 14%; }
+    .hotspots-table th:nth-child(3), .hotspots-table td:nth-child(3) { width: 10%; }
+    .hotspots-table th:nth-child(4), .hotspots-table td:nth-child(4) { width: 14%; }
+    .hotspots-table th:nth-child(5), .hotspots-table td:nth-child(5) { width: 20%; }
+    .hotspots-table th:nth-child(6), .hotspots-table td:nth-child(6) { width: 6%; }
+    .hotspots-table th:nth-child(7), .hotspots-table td:nth-child(7) { width: 32%; }
+
     /* Severity badges */
     .sev { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; color: #fff; }
     .sev-BLOCKER { background: var(--color-blocker); }
@@ -164,6 +183,10 @@
     .sev-INFO { background: var(--color-info); }
 
     .type-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; background: #e3f2fd; color: #1565c0; }
+    .status-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .status-reviewed { background: #e8f5e9; color: #1b5e20; }
+    .status-to-review { background: #fff3cd; color: #7c5700; }
+    .status-unknown { background: #eceff1; color: #455a64; }
 
     /* Footer */
     .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--color-border); font-size: 0.8rem; color: var(--color-muted); text-align: center; }
@@ -316,6 +339,9 @@
     </div>
     </div>
   </div>
+
+  <h2>Security Hotspots Details</h2>
+  {{HOTSPOTS_TABLE}}
 
   <!-- New Code Period -->
   <h2>New Code Period</h2>

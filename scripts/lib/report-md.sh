@@ -211,6 +211,27 @@ $(echo "$report_data" | jq -r '
 
 ---
 
+## Security Hotspots Details
+
+$(echo "$report_data" | jq -r '
+  if (.hotspots | length) > 0 then
+    "| # | Status | Risk | Rule | Component | Line | Message |\n|---|--------|------|------|-----------|------|---------|" +
+    ([.hotspots | to_entries[]? |
+      "| " + ((.key + 1) | tostring) +
+      " | " + (.value.status // "?") +
+      " | " + (.value.vulnerabilityProbability // "N/A") +
+      " | " + (.value.rule // "") +
+      " | " + ((.value.component // "") | split(":") | last) +
+      " | " + ((.value.line // "") | tostring) +
+      " | " + ((.value.message // "") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\\|"; "\\\\|")) + " |"
+    ] | join("\n"))
+  else
+    "_No security hotspots found._"
+  end
+')
+
+---
+
 ## Issues Details
 
 $(echo "$report_data" | jq -r '
