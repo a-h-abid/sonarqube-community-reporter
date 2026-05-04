@@ -184,6 +184,17 @@ $(echo "$report_data" | jq -r '
 ## Issues Summary
 
 **Total Open Issues: ${total_issues}**
+
+### By Type
+
+| Type | Count |
+|------|-------|
+| 🐛 Bug | ${issue_bugs} |
+| 🔒 Vulnerability | ${issue_vulns} |
+| 🔧 Code Smell | ${issue_smells} |
+
+### By Severity
+
 | Severity | Count |
 |----------|-------|
 | ⛔ Blocker | ${sev_blocker} |
