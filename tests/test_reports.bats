@@ -137,6 +137,8 @@ setup() {
   source "${REPO_ROOT}/scripts/lib/report-xlsx.sh"
   # shellcheck source=../scripts/lib/report-ods.sh
   source "${REPO_ROOT}/scripts/lib/report-ods.sh"
+  # shellcheck source=../scripts/lib/report-csv.sh
+  source "${REPO_ROOT}/scripts/lib/report-csv.sh"
 }
 
 teardown() {
@@ -666,4 +668,109 @@ teardown() {
   SSCONVERT_BIN="__missing_ssconvert__" run generate_ods_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
   [ "$status" -eq 0 ]
   [[ "$output" == *"skipping ODS generation"* ]]
+}
+
+# ===========================================================================
+# generate_csv_report
+# ===========================================================================
+
+@test "generate_csv_report: creates three CSV files in output dir" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+
+  local csv_files
+  csv_files=$(find "$_OUTPUT_DIR" -name "*.csv" | wc -l)
+  [ "$csv_files" -eq 3 ]
+}
+
+@test "generate_csv_report: all three file paths are printed" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+
+  # Last 3 output lines should be file paths that exist
+  local n="${#lines[@]}"
+  [ -f "${lines[$((n-3))]}" ]
+  [ -f "${lines[$((n-2))]}" ]
+  [ -f "${lines[$((n-1))]}" ]
+}
+
+@test "generate_csv_report: file names contain project key" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "${lines[-1]}" == *"my-project"* ]]
+  [[ "${lines[-2]}" == *"my-project"* ]]
+  [[ "${lines[-3]}" == *"my-project"* ]]
+}
+
+@test "generate_csv_report: summary CSV has expected headers" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  local summary_file="${lines[$((n-3))]}"
+  grep -q '"Metric","Value"' "$summary_file"
+}
+
+@test "generate_csv_report: summary CSV contains quality gate status" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  local summary_file="${lines[$((n-3))]}"
+  grep -q '"Quality Gate Status","OK"' "$summary_file"
+}
+
+@test "generate_csv_report: issues CSV has expected headers" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  local issues_file="${lines[$((n-2))]}"
+  grep -q '"Key","Severity","Type","Rule","Component","Line","Message","Effort","Creation Date"' "$issues_file"
+}
+
+@test "generate_csv_report: issues CSV contains issue data" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  local issues_file="${lines[$((n-2))]}"
+  grep -q '"AXyz111"' "$issues_file"
+  grep -q '"CRITICAL"' "$issues_file"
+  grep -q '"Null pointer dereference"' "$issues_file"
+}
+
+@test "generate_csv_report: hotspots CSV has expected headers" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  local hotspots_file="${lines[$((n-1))]}"
+  grep -q '"Key","Status","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"' "$hotspots_file"
+}
+
+@test "generate_csv_report: hotspots CSV contains hotspot data" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  local hotspots_file="${lines[$((n-1))]}"
+  grep -q '"HS1"' "$hotspots_file"
+  grep -q '"TO_REVIEW"' "$hotspots_file"
+  grep -q '"Unsanitized SQL query"' "$hotspots_file"
+}
+
+@test "generate_csv_report: summary filename ends with _summary.csv" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  [[ "${lines[$((n-3))]}" == *_summary.csv ]]
+}
+
+@test "generate_csv_report: issues filename ends with _issues.csv" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  [[ "${lines[$((n-2))]}" == *_issues.csv ]]
+}
+
+@test "generate_csv_report: hotspots filename ends with _hotspots.csv" {
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local n="${#lines[@]}"
+  [[ "${lines[$((n-1))]}" == *_hotspots.csv ]]
 }

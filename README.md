@@ -6,12 +6,14 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 
 ## Features
 
-- **Multi-format reports** — JSON, Markdown, HTML (styled), PDF, XLSX, and ODS with project metadata including report date, last analysis datetime, and analysis ID
+- **Multi-format reports** — JSON, Markdown, HTML (styled), PDF, XLSX, ODS, and CSV with project metadata including report date, last analysis datetime, and analysis ID
 - **All key metrics** — Quality Gate, bugs, vulnerabilities, code smells, coverage, duplications, technical debt, security hotspots, ratings (A–E)
 - **New Code Period** — Track metrics on newly added code
 - **Issues Details** — Lists all open issues with severity, type, rule, file/line details, and effort
 - **Security Hotspot Details** — Lists security hotspots with rule, file/line details, risk level, and review status
 - **Analysis polling** — Waits for SonarQube Compute Engine to finish before fetching results
+- **Dry-run / offline mode** — Regenerate reports from a saved report data JSON file without making any API calls
+- **Webhook notifications** — Post a summary (quality gate, issue counts, report list) to any Slack, Teams, or generic incoming webhook URL after generation
 - **CI/CD ready** — GitHub Actions and GitLab CI/CD pipelines included
 - **Docker Compose** — One-command SonarQube + PostgreSQL setup
 - **Fail on gate** — Exit code 1 when quality gate fails (for CI enforcement)
@@ -103,13 +105,17 @@ Options:
   --branch BRANCH        Branch name (optional)     (env: SONAR_BRANCH)
   --task-id ID           CE task ID to poll         (env: SONAR_TASK_ID)
   --formats FMT          Comma-separated formats    (env: REPORT_FORMATS)
-                         Supported: json,md,html,pdf,xlsx,ods
+                         Supported: json,md,html,pdf,xlsx,ods,csv
   --output-dir DIR       Output directory           (env: REPORT_OUTPUT_DIR)
   --wait                 Wait for analysis to complete
   --no-wait              Skip analysis polling (default)
   --poll-interval SECS   Seconds between polls      (env: POLL_INTERVAL)
   --poll-timeout SECS    Max wait time in seconds   (env: POLL_TIMEOUT)
   --fail-on-gate         Exit 1 if quality gate fails
+  --dry-run FILE         Skip API calls; use saved report data JSON
+                                                    (env: DRY_RUN_FILE)
+  --notify-webhook URL   Post summary to a webhook after generation
+                                                    (env: NOTIFY_WEBHOOK)
   -h, --help             Show help
 ```
 
@@ -120,6 +126,61 @@ All CLI options can be set via environment variables. Create a `.env` file from 
 ```bash
 cp .env.example .env
 ```
+
+### CSV Export
+
+The `csv` format generates three plain-text CSV files — summary, issues, and hotspots — that require no additional tools beyond `jq` (already a prerequisite):
+
+```bash
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 \
+  --token YOUR_TOKEN \
+  --project-key my-project \
+  --formats csv
+```
+
+Three files are written to the output directory:
+- `{project_key}_{timestamp}_summary.csv` — KPI-level metrics
+- `{project_key}_{timestamp}_issues.csv` — All open issues
+- `{project_key}_{timestamp}_hotspots.csv` — All security hotspots
+
+### Dry-Run / Offline Mode
+
+Use `--dry-run FILE` to regenerate reports from a previously saved JSON report data file without making any SonarQube API calls. This is useful for iterating on report formatting or re-exporting in a different format:
+
+```bash
+# Regenerate HTML and CSV from an existing JSON report data file
+./scripts/sonar-report.sh \
+  --dry-run ./reports/my-project_20240601_120000.json \
+  --formats html,csv \
+  --output-dir ./reports/regen
+```
+
+- `SONAR_TOKEN` and `SONAR_URL` are not required in dry-run mode
+- `SONAR_PROJECT_KEY` is auto-populated from the file's metadata if not set
+
+### Webhook Notifications
+
+Use `--notify-webhook URL` to post a summary to a Slack Incoming Webhook, Microsoft Teams Incoming Webhook, or any generic HTTP endpoint that accepts a JSON POST:
+
+```bash
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 \
+  --token YOUR_TOKEN \
+  --project-key my-project \
+  --formats json,html \
+  --notify-webhook https://hooks.slack.com/services/T.../B.../xxx
+```
+
+The payload is a standard `{"text": "..."}` JSON body compatible with both Slack and Teams webhooks. It includes:
+- Project name, key, and branch
+- Quality gate status (with ✅ / ❌ / ⚠️ emoji)
+- Bug, vulnerability, code smell, and total issue counts
+- Hotspot count
+- Report date and SonarQube URL
+- List of generated file names
+
+The webhook is also configurable via the `NOTIFY_WEBHOOK` environment variable.
 
 ### Using Docker
 
@@ -289,7 +350,9 @@ bash tests/run_tests.sh
 | `tests/test_api.bats` | 40 | `rating_to_letter`, `format_duration`, `safe_jq`, `sonar_api_get` (mocked `curl`), `check_connectivity`, `sonar_api_paginated` |
 | `tests/test_metrics.bats` | 31 | All `fetch_*` functions with `sonar_api_get` mocked per-test, including last analysis datetime lookup |
 | `tests/test_wait_for_analysis.bats` | 18 | `extract_task_id_from_report`, `_poll_by_task_id` (including PENDING→SUCCESS transition), `_poll_by_component`, `wait_for_analysis` dispatch |
-| `tests/test_reports.bats` | 36 | `generate_json_report`, `generate_md_report`, `generate_html_report` using fixture data — validates file creation, content, rendered metadata, and no unreplaced template placeholders |
+| `tests/test_main.bats` | 11 | `normalize_format`, `validate_report_formats`, `validate_params` (dry-run mode), `parse_args` (new flags) |
+| `tests/test_reports.bats` | 47 | `generate_json_report`, `generate_md_report`, `generate_html_report`, `generate_csv_report` — validates file creation, content, rendered metadata, and CSV row data |
+| `tests/test_notify.bats` | 12 | `send_webhook_notification` with mocked `curl` — payload structure, emoji selection, HTTP error handling |
 
 Test fixtures (JSON files representing every SonarQube API response shape) live in `tests/fixtures/`.
 
@@ -342,10 +405,15 @@ All open issues sorted by severity, with file path, line number, rule, message, 
 │   └── lib/
 │       ├── api.sh                    # API helpers (auth, HTTP, pagination)
 │       ├── metrics.sh                # Data fetching (measures, issues, hotspots)
+│       ├── notify.sh                 # Webhook notification helper
 │       ├── report-json.sh            # JSON report generator
 │       ├── report-md.sh              # Markdown report generator
 │       ├── report-html.sh            # HTML report generator
-│       └── report-pdf.sh             # PDF report generator (wkhtmltopdf)
+│       ├── report-pdf.sh             # PDF report generator (wkhtmltopdf)
+│       ├── report-spreadsheet.sh     # Shared CSV/spreadsheet helpers
+│       ├── report-xlsx.sh            # XLSX report generator (ssconvert)
+│       ├── report-ods.sh             # ODS report generator (ssconvert)
+│       └── report-csv.sh             # CSV report generator (jq only)
 ├── templates/
 │   └── report.html.tpl               # Styled HTML template
 ├── tests/

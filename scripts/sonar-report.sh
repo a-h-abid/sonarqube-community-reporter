@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # sonar-report.sh — Main entrypoint: fetch SonarQube analysis data & generate
-#                    reports in JSON, Markdown, HTML, PDF, XLSX, and ODS.
+#                    reports in JSON, Markdown, HTML, PDF, XLSX, ODS, and CSV.
 # ==============================================================================
 # Usage:
 #   ./scripts/sonar-report.sh [OPTIONS]
@@ -12,13 +12,19 @@
 #   --project-key KEY      Project key                (env: SONAR_PROJECT_KEY)
 #   --branch BRANCH        Branch name (optional)     (env: SONAR_BRANCH)
 #   --task-id ID           CE task ID to poll         (env: SONAR_TASK_ID)
-#   --formats FMT          Comma-separated: json,md,html,pdf,xlsx,ods (env: REPORT_FORMATS)
+#   --formats FMT          Comma-separated: json,md,html,pdf,xlsx,ods,csv
+#                                                     (env: REPORT_FORMATS)
 #   --output-dir DIR       Output directory           (env: REPORT_OUTPUT_DIR)
 #   --wait                 Wait for analysis to finish before generating report
 #   --no-wait              Skip analysis polling (default)
 #   --poll-interval SECS   Poll interval              (env: POLL_INTERVAL)
 #   --poll-timeout SECS    Poll timeout               (env: POLL_TIMEOUT)
 #   --fail-on-gate         Exit 1 if quality gate failed
+#   --dry-run FILE         Skip API calls; regenerate reports from a saved
+#                          report data JSON file     (env: DRY_RUN_FILE)
+#   --notify-webhook URL   Post a summary notification to a Slack/Teams/generic
+#                          webhook URL after report generation
+#                                                     (env: NOTIFY_WEBHOOK)
 #   -h, --help             Show this help
 # ==============================================================================
 set -euo pipefail
@@ -49,6 +55,10 @@ source "${_MAIN_SCRIPT_DIR}/lib/report-pdf.sh"
 source "${_MAIN_SCRIPT_DIR}/lib/report-xlsx.sh"
 # shellcheck source=lib/report-ods.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-ods.sh"
+# shellcheck source=lib/report-csv.sh
+source "${_MAIN_SCRIPT_DIR}/lib/report-csv.sh"
+# shellcheck source=lib/notify.sh
+source "${_MAIN_SCRIPT_DIR}/lib/notify.sh"
 # shellcheck source=wait-for-analysis.sh
 source "${_MAIN_SCRIPT_DIR}/wait-for-analysis.sh"
 
@@ -65,6 +75,8 @@ REPORT_OUTPUT_DIR="${REPORT_OUTPUT_DIR:-./reports}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
 POLL_TIMEOUT="${POLL_TIMEOUT:-300}"
 ANALYSIS_ID="${ANALYSIS_ID:-}"
+DRY_RUN_FILE="${DRY_RUN_FILE:-}"
+NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK:-}"
 
 WAIT_FOR_ANALYSIS=false
 FAIL_ON_GATE=false
@@ -74,7 +86,7 @@ REQUESTED_FORMATS=()
 # CLI Argument Parsing
 # ===========================================================================
 show_help() {
-  head -n 23 "$0" | grep '^#' | sed 's/^# \?//'
+  head -n 30 "$0" | grep '^#' | sed 's/^# \?//'
   exit 0
 }
 
@@ -93,6 +105,8 @@ parse_args() {
       --poll-interval)   POLL_INTERVAL="$2";      shift 2 ;;
       --poll-timeout)    POLL_TIMEOUT="$2";       shift 2 ;;
       --fail-on-gate)    FAIL_ON_GATE=true;       shift   ;;
+      --dry-run)         DRY_RUN_FILE="$2";       shift 2 ;;
+      --notify-webhook)  NOTIFY_WEBHOOK="$2";     shift 2 ;;
       -h|--help)         show_help ;;
       *)
         log_error "Unknown option: $1"
@@ -135,7 +149,7 @@ validate_report_formats() {
 
   if [[ "${#raw_formats[@]}" -eq 0 ]]; then
     log_error "At least one report format is required"
-    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods"
+    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods, csv"
     return 1
   fi
 
@@ -149,7 +163,7 @@ validate_report_formats() {
     fi
 
     case "$fmt" in
-      json|md|html|pdf|xlsx|ods)
+      json|md|html|pdf|xlsx|ods|csv)
         if contains_value "$fmt" "${normalized_formats[@]}"; then
           log_warn "Duplicate format '${raw}' requested — keeping one"
           continue
@@ -164,7 +178,7 @@ validate_report_formats() {
   done
 
   if [[ "$errors" -gt 0 ]]; then
-    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods"
+    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods, csv"
     return 1
   fi
 
@@ -182,14 +196,33 @@ validate_report_formats() {
 validate_params() {
   local errors=0
 
-  if [[ -z "$SONAR_TOKEN" ]]; then
-    log_error "SONAR_TOKEN is required (use --token or set env var)"
-    errors=$((errors + 1))
-  fi
+  if [[ -n "$DRY_RUN_FILE" ]]; then
+    # Dry-run mode: validate the provided JSON file; no token/URL needed.
+    if [[ ! -f "$DRY_RUN_FILE" ]]; then
+      log_error "Dry-run file not found: ${DRY_RUN_FILE}"
+      errors=$((errors + 1))
+    else
+      local dry_run_key
+      dry_run_key=$(jq -r '.metadata.projectKey // empty' "$DRY_RUN_FILE" 2>/dev/null) || {
+        log_error "Dry-run file is not valid JSON: ${DRY_RUN_FILE}"
+        errors=$((errors + 1))
+      }
+      # Auto-populate project key from the file when not set explicitly
+      if [[ -z "$SONAR_PROJECT_KEY" ]] && [[ -n "${dry_run_key:-}" ]]; then
+        SONAR_PROJECT_KEY="$dry_run_key"
+        log_info "Project key from dry-run file: ${SONAR_PROJECT_KEY}"
+      fi
+    fi
+  else
+    if [[ -z "$SONAR_TOKEN" ]]; then
+      log_error "SONAR_TOKEN is required (use --token or set env var)"
+      errors=$((errors + 1))
+    fi
 
-  if [[ -z "$SONAR_PROJECT_KEY" ]]; then
-    log_error "SONAR_PROJECT_KEY is required (use --project-key or set env var)"
-    errors=$((errors + 1))
+    if [[ -z "$SONAR_PROJECT_KEY" ]]; then
+      log_error "SONAR_PROJECT_KEY is required (use --project-key or set env var)"
+      errors=$((errors + 1))
+    fi
   fi
 
   if ! validate_report_formats; then
@@ -219,38 +252,53 @@ main() {
 
   log_info "Project:    ${SONAR_PROJECT_KEY}"
   log_info "Branch:     ${SONAR_BRANCH:-<default>}"
-  log_info "URL:        ${SONAR_URL}"
+  if [[ -n "$DRY_RUN_FILE" ]]; then
+    log_info "Mode:       dry-run (offline — using ${DRY_RUN_FILE})"
+  else
+    log_info "URL:        ${SONAR_URL}"
+  fi
   log_info "Formats:    ${REPORT_FORMATS}"
   log_info "Output:     ${REPORT_OUTPUT_DIR}"
   echo ""
 
-  # --- Step 1: Check connectivity ---
-  check_connectivity || exit 1
-  echo ""
+  # --- Step 1: Check connectivity (skipped in dry-run mode) ---
+  if [[ -z "$DRY_RUN_FILE" ]]; then
+    check_connectivity || exit 1
+    echo ""
+  fi
 
-  # --- Step 2: Wait for analysis (if requested) ---
-  if [[ "$WAIT_FOR_ANALYSIS" == "true" ]]; then
+  # --- Step 2: Wait for analysis (skipped in dry-run mode) ---
+  if [[ "$WAIT_FOR_ANALYSIS" == "true" ]] && [[ -z "$DRY_RUN_FILE" ]]; then
     wait_for_analysis || exit 1
     echo ""
   fi
 
-  # --- Step 3: Fetch all metrics ---
-  log_info "Collecting analysis data ..."
-  echo ""
-
-  # Write report data to a temp file to avoid holding large JSON in shell
-  # variables and passing it as function arguments (which degrades with
-  # large issue sets).
+  # --- Step 3: Fetch all metrics (or reuse dry-run file) ---
   local report_data_file
-  report_data_file=$(mktemp)
-  trap 'rm -f "$report_data_file"' EXIT
+  local _owned_report_data_file=false
 
-  fetch_all_metrics > "$report_data_file" || {
-    log_error "Failed to collect analysis data"
-    rm -f "$report_data_file"
-    exit 1
-  }
-  echo ""
+  if [[ -n "$DRY_RUN_FILE" ]]; then
+    report_data_file="$DRY_RUN_FILE"
+    log_info "Loading report data from: ${DRY_RUN_FILE}"
+    echo ""
+  else
+    log_info "Collecting analysis data ..."
+    echo ""
+
+    # Write report data to a temp file to avoid holding large JSON in shell
+    # variables and passing it as function arguments (which degrades with
+    # large issue sets).
+    report_data_file=$(mktemp)
+    _owned_report_data_file=true
+    trap '[[ "$_owned_report_data_file" == "true" ]] && rm -f "$report_data_file"' EXIT
+
+    fetch_all_metrics > "$report_data_file" || {
+      log_error "Failed to collect analysis data"
+      rm -f "$report_data_file"
+      exit 1
+    }
+    echo ""
+  fi
 
   # --- Step 4: Generate reports ---
   local generated_files=()
@@ -311,6 +359,13 @@ main() {
           skipped_formats+=("ods")
         fi
         ;;
+      csv)
+        local csv_out
+        csv_out=$(generate_csv_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+        while IFS= read -r f; do
+          [[ -n "$f" ]] && generated_files+=("$f")
+        done <<< "$csv_out"
+        ;;
     esac
   done
 
@@ -340,7 +395,14 @@ main() {
   echo "────────────────────────────────────────────────────────────────"
   echo ""
 
-  # --- Step 6: Exit code ---
+  # --- Step 6: Webhook notification (optional) ---
+  if [[ -n "$NOTIFY_WEBHOOK" ]]; then
+    send_webhook_notification "$NOTIFY_WEBHOOK" "$report_data_file" "${generated_files[@]}" || \
+      log_warn "Webhook notification failed — continuing"
+    echo ""
+  fi
+
+  # --- Step 7: Exit code ---
   if [[ "$FAIL_ON_GATE" == "true" ]] && [[ "$qg_status" == "ERROR" ]]; then
     log_error "Exiting with code 1 because quality gate failed (--fail-on-gate)"
     exit 1
