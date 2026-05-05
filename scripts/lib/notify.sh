@@ -93,8 +93,8 @@ send_webhook_notification() {
 
   local tmpfile
   tmpfile=$(mktemp)
-  # Guard prevents the trap from failing when it fires in an outer caller's
-  # scope (where $tmpfile is unset) due to bash RETURN traps being shell-wide.
+  # Guard prevents the trap from failing if it fires before $tmpfile is
+  # assigned (e.g. if mktemp fails partway through the function).
   trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile"' RETURN
 
   local http_code

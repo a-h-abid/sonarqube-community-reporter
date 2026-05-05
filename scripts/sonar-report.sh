@@ -275,7 +275,7 @@ main() {
 
   # --- Step 3: Fetch all metrics (or reuse dry-run file) ---
   local report_data_file
-  local _owned_report_data_file=false
+  local _owned_report_data_file=""
 
   if [[ -n "$DRY_RUN_FILE" ]]; then
     report_data_file="$DRY_RUN_FILE"
@@ -289,8 +289,8 @@ main() {
     # variables and passing it as function arguments (which degrades with
     # large issue sets).
     report_data_file=$(mktemp)
-    _owned_report_data_file=true
-    trap '[[ "$_owned_report_data_file" == "true" ]] && rm -f "$report_data_file"' EXIT
+    _owned_report_data_file="yes"
+    trap '[[ -n "$_owned_report_data_file" ]] && rm -f "$report_data_file"' EXIT
 
     fetch_all_metrics > "$report_data_file" || {
       log_error "Failed to collect analysis data"
