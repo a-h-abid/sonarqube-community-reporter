@@ -25,11 +25,17 @@ SONAR_ORGANIZATION="${SONAR_ORGANIZATION:-}"
 
 # ---------------------------------------------------------------------------
 # detect_sonarcloud
-#   Sets SONAR_CLOUD=true when SONAR_URL matches *.sonarcloud.io*.
+#   Sets SONAR_CLOUD=true when the host in SONAR_URL is exactly sonarcloud.io
+#   or a subdomain ending in .sonarcloud.io.
 #   Safe to call multiple times (idempotent — only ever sets true).
 # ---------------------------------------------------------------------------
 detect_sonarcloud() {
-  if [[ "${SONAR_URL:-}" == *"sonarcloud.io"* ]]; then
+  local url="${SONAR_URL:-}"
+  # Extract host by stripping scheme, path, and port
+  local host="${url#*://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  if [[ "$host" == "sonarcloud.io" ]] || [[ "$host" == *.sonarcloud.io ]]; then
     SONAR_CLOUD=true
   fi
 }
@@ -54,12 +60,16 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 sonar_api_get() {
   local endpoint="$1"; shift
 
-  # Inject organization param transparently for SonarCloud
-  if [[ -n "${SONAR_ORGANIZATION:-}" ]]; then
+  # Inject organization param transparently for SonarCloud.
+  # Skip injection when SONAR_ORGANIZATION is empty or when the endpoint
+  # already contains organization= (prevents duplicate parameters).
+  if [[ -n "${SONAR_ORGANIZATION:-}" ]] && [[ "$endpoint" != *"organization="* ]]; then
+    local org_encoded
+    org_encoded=$(printf '%s' "${SONAR_ORGANIZATION}" | jq -sRr @uri)
     if [[ "$endpoint" == *"?"* ]]; then
-      endpoint="${endpoint}&organization=${SONAR_ORGANIZATION}"
+      endpoint="${endpoint}&organization=${org_encoded}"
     else
-      endpoint="${endpoint}?organization=${SONAR_ORGANIZATION}"
+      endpoint="${endpoint}?organization=${org_encoded}"
     fi
   fi
 

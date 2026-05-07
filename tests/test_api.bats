@@ -451,9 +451,66 @@ setup() {
   [ "$SONAR_CLOUD" = "true" ]
 }
 
+@test "detect_sonarcloud: does not set SONAR_CLOUD=true for lookalike domain (sonarcloud.io.example.com)" {
+  SONAR_URL="https://sonarcloud.io.example.com"
+  SONAR_CLOUD=false
+
+  detect_sonarcloud
+
+  [ "$SONAR_CLOUD" = "false" ]
+}
+
+@test "detect_sonarcloud: sets SONAR_CLOUD=true for URL with path and port" {
+  SONAR_URL="https://sonarcloud.io:443/path"
+  SONAR_CLOUD=false
+
+  detect_sonarcloud
+
+  [ "$SONAR_CLOUD" = "true" ]
+}
+
 # ===========================================================================
 # sonar_api_get — organization injection
 # ===========================================================================
+
+@test "sonar_api_get: does not duplicate organization param when already in endpoint" {
+  export _URL_FILE4
+  _URL_FILE4=$(mktemp)
+
+  curl() {
+    local args=("$@")
+    local last_index=$(( ${#args[@]} - 1 ))
+    printf '%s' "${args[$last_index]}" >"$_URL_FILE4"
+    local outfile=""
+    local i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+      if [[ "${args[$i]}" == "-o" ]]; then
+        outfile="${args[$((i + 1))]}"
+        i=$((i + 2))
+      else
+        i=$((i + 1))
+      fi
+    done
+    [[ -n "$outfile" ]] && printf '%s' "${MOCK_CURL_BODY:-}" >"$outfile"
+    printf '%s' "${MOCK_CURL_STATUS:-200}"
+  }
+  export -f curl
+
+  MOCK_CURL_STATUS="200"
+  MOCK_CURL_BODY='{"status":"OK","conditions":[]}'
+  export MOCK_CURL_STATUS MOCK_CURL_BODY
+  SONAR_ORGANIZATION="myorg"
+
+  run sonar_api_get "qualitygates/project_status?projectKey=test&organization=myorg"
+  local called_url
+  called_url=$(cat "$_URL_FILE4")
+  rm -f "$_URL_FILE4"
+  [ "$status" -eq 0 ]
+  # organization= should appear only once
+  local count
+  count=$(echo "$called_url" | grep -o 'organization=' | wc -l)
+  [ "$count" -eq 1 ]
+}
 
 @test "sonar_api_get: appends organization param when SONAR_ORGANIZATION is set (no existing query)" {
   export _URL_FILE
@@ -461,7 +518,8 @@ setup() {
 
   curl() {
     local args=("$@")
-    printf '%s' "${args[-1]}" >"$_URL_FILE"
+    local last_index=$(( ${#args[@]} - 1 ))
+    printf '%s' "${args[$last_index]}" >"$_URL_FILE"
     local outfile=""
     local i=0
     while [[ $i -lt ${#args[@]} ]]; do
@@ -496,7 +554,8 @@ setup() {
 
   curl() {
     local args=("$@")
-    printf '%s' "${args[-1]}" >"$_URL_FILE2"
+    local last_index=$(( ${#args[@]} - 1 ))
+    printf '%s' "${args[$last_index]}" >"$_URL_FILE2"
     local outfile=""
     local i=0
     while [[ $i -lt ${#args[@]} ]]; do
@@ -531,7 +590,8 @@ setup() {
 
   curl() {
     local args=("$@")
-    printf '%s' "${args[-1]}" >"$_URL_FILE3"
+    local last_index=$(( ${#args[@]} - 1 ))
+    printf '%s' "${args[$last_index]}" >"$_URL_FILE3"
     local outfile=""
     local i=0
     while [[ $i -lt ${#args[@]} ]]; do

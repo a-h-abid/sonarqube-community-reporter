@@ -3,6 +3,7 @@
 # sonar-report.sh — Main entrypoint: fetch SonarQube analysis data & generate
 #                    reports in JSON, Markdown, HTML, PDF, XLSX, ODS, and CSV.
 # ==============================================================================
+# HELP_BEGIN
 # Usage:
 #   ./scripts/sonar-report.sh [OPTIONS]
 #
@@ -29,6 +30,7 @@
 #                          webhook URL after report generation
 #                                                       (env: NOTIFY_WEBHOOK)
 #   -h, --help             Show this help
+# HELP_END
 # ==============================================================================
 set -euo pipefail
 
@@ -91,7 +93,7 @@ REQUESTED_FORMATS=()
 # CLI Argument Parsing
 # ===========================================================================
 show_help() {
-  awk 'NR > 1 && /^[^#]/ { exit } NR > 1 { gsub(/^# ?/, ""); print }' "$0"
+  sed -n '/^# HELP_BEGIN$/,/^# HELP_END$/{/^# HELP_BEGIN$/d; /^# HELP_END$/d; s/^# \?//; p}' "$0"
   exit 0
 }
 
