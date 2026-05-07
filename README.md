@@ -127,6 +127,51 @@ All CLI options can be set via environment variables. Create a `.env` file from 
 cp .env.example .env
 ```
 
+### SonarCloud Support
+
+The tool works with **SonarCloud** in addition to self-hosted SonarQube Community Edition.
+SonarCloud is auto-detected when the URL contains `sonarcloud.io`, or you can enable it
+explicitly with `--sonarcloud`.
+
+#### Key differences handled automatically
+
+| Behaviour | SonarQube | SonarCloud |
+|-----------|-----------|------------|
+| `system/status` check | ✅ performed | ⏭ skipped (endpoint absent) |
+| CE task polling (`--wait`) | ✅ supported | ⚠️ skipped with a warning |
+| `project_analyses/search` | ✅ fetched | ⏭ skipped |
+| `organization=` param | not required | required on most endpoints |
+
+#### Usage
+
+```bash
+./scripts/sonar-report.sh \
+  --url https://sonarcloud.io \
+  --token YOUR_SONARCLOUD_TOKEN \
+  --project-key my-org_my-project \
+  --organization my-org \
+  --formats json,md,html \
+  --output-dir ./reports
+```
+
+Or via environment variables:
+
+```bash
+export SONAR_URL=https://sonarcloud.io
+export SONAR_TOKEN=YOUR_SONARCLOUD_TOKEN
+export SONAR_PROJECT_KEY=my-org_my-project
+export SONAR_ORGANIZATION=my-org
+export REPORT_FORMATS=json,md,html
+
+./scripts/sonar-report.sh
+```
+
+#### Notes
+
+- `--organization` / `SONAR_ORGANIZATION` is **required** when targeting SonarCloud.
+- `--wait` is accepted but has no effect on SonarCloud (CE endpoints are not available); a warning is logged and execution continues normally.
+- SonarCloud is auto-detected from the URL, so `--sonarcloud` is optional when using `https://sonarcloud.io`.
+
 ### CSV Export
 
 The `csv` format generates three plain-text CSV files — summary, issues, and hotspots — that require no additional tools beyond `jq` (already a prerequisite):

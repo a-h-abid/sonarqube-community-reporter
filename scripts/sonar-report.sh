@@ -7,24 +7,27 @@
 #   ./scripts/sonar-report.sh [OPTIONS]
 #
 # Options:
-#   --url URL              SonarQube base URL         (env: SONAR_URL)
-#   --token TOKEN          Authentication token       (env: SONAR_TOKEN)
-#   --project-key KEY      Project key                (env: SONAR_PROJECT_KEY)
-#   --branch BRANCH        Branch name (optional)     (env: SONAR_BRANCH)
-#   --task-id ID           CE task ID to poll         (env: SONAR_TASK_ID)
+#   --url URL              SonarQube/SonarCloud base URL (env: SONAR_URL)
+#   --token TOKEN          Authentication token          (env: SONAR_TOKEN)
+#   --project-key KEY      Project key                  (env: SONAR_PROJECT_KEY)
+#   --branch BRANCH        Branch name (optional)       (env: SONAR_BRANCH)
+#   --task-id ID           CE task ID to poll           (env: SONAR_TASK_ID)
 #   --formats FMT          Comma-separated: json,md,html,pdf,xlsx,ods,csv
-#                                                     (env: REPORT_FORMATS)
-#   --output-dir DIR       Output directory           (env: REPORT_OUTPUT_DIR)
+#                                                       (env: REPORT_FORMATS)
+#   --output-dir DIR       Output directory             (env: REPORT_OUTPUT_DIR)
+#   --sonarcloud           Use SonarCloud API (auto-detected from URL)
+#                                                       (env: SONAR_CLOUD)
+#   --organization ORG     SonarCloud organization key  (env: SONAR_ORGANIZATION)
 #   --wait                 Wait for analysis to finish before generating report
 #   --no-wait              Skip analysis polling (default)
-#   --poll-interval SECS   Poll interval              (env: POLL_INTERVAL)
-#   --poll-timeout SECS    Poll timeout               (env: POLL_TIMEOUT)
+#   --poll-interval SECS   Poll interval                (env: POLL_INTERVAL)
+#   --poll-timeout SECS    Poll timeout                 (env: POLL_TIMEOUT)
 #   --fail-on-gate         Exit 1 if quality gate failed
 #   --dry-run FILE         Skip API calls; regenerate reports from a saved
-#                          report data JSON file     (env: DRY_RUN_FILE)
+#                          report data JSON file        (env: DRY_RUN_FILE)
 #   --notify-webhook URL   Post a summary notification to a Slack/Teams/generic
 #                          webhook URL after report generation
-#                                                     (env: NOTIFY_WEBHOOK)
+#                                                       (env: NOTIFY_WEBHOOK)
 #   -h, --help             Show this help
 # ==============================================================================
 set -euo pipefail
@@ -70,6 +73,8 @@ SONAR_TOKEN="${SONAR_TOKEN:-}"
 SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-}"
 SONAR_BRANCH="${SONAR_BRANCH:-}"
 SONAR_TASK_ID="${SONAR_TASK_ID:-}"
+SONAR_ORGANIZATION="${SONAR_ORGANIZATION:-}"
+SONAR_CLOUD="${SONAR_CLOUD:-false}"
 REPORT_FORMATS="${REPORT_FORMATS:-json,md,html,pdf,xlsx,ods}"
 REPORT_OUTPUT_DIR="${REPORT_OUTPUT_DIR:-./reports}"
 POLL_INTERVAL="${POLL_INTERVAL:-5}"
@@ -86,7 +91,7 @@ REQUESTED_FORMATS=()
 # CLI Argument Parsing
 # ===========================================================================
 show_help() {
-  head -n 30 "$0" | grep '^#' | sed 's/^# \?//'
+  head -n 35 "$0" | grep '^#' | sed 's/^# \?//'
   exit 0
 }
 
@@ -100,6 +105,8 @@ parse_args() {
       --task-id)         SONAR_TASK_ID="$2";      shift 2 ;;
       --formats)         REPORT_FORMATS="$2";     shift 2 ;;
       --output-dir)      REPORT_OUTPUT_DIR="$2";  shift 2 ;;
+      --sonarcloud)      SONAR_CLOUD=true;         shift   ;;
+      --organization)    SONAR_ORGANIZATION="$2"; shift 2 ;;
       --wait)            WAIT_FOR_ANALYSIS=true;  shift   ;;
       --no-wait)         WAIT_FOR_ANALYSIS=false; shift   ;;
       --poll-interval)   POLL_INTERVAL="$2";      shift 2 ;;
@@ -196,6 +203,9 @@ validate_report_formats() {
 validate_params() {
   local errors=0
 
+  # Auto-detect SonarCloud from URL before validating other parameters
+  detect_sonarcloud
+
   if [[ -n "$DRY_RUN_FILE" ]]; then
     # Dry-run mode: validate the provided JSON file; no token/URL needed.
     if [[ ! -f "$DRY_RUN_FILE" ]]; then
@@ -221,6 +231,11 @@ validate_params() {
 
     if [[ -z "$SONAR_PROJECT_KEY" ]]; then
       log_error "SONAR_PROJECT_KEY is required (use --project-key or set env var)"
+      errors=$((errors + 1))
+    fi
+
+    if [[ "${SONAR_CLOUD:-false}" == "true" ]] && [[ -z "$SONAR_ORGANIZATION" ]]; then
+      log_error "SONAR_ORGANIZATION is required for SonarCloud (use --organization or set env var)"
       errors=$((errors + 1))
     fi
   fi
@@ -254,7 +269,12 @@ main() {
   log_info "Branch:     ${SONAR_BRANCH:-<default>}"
   if [[ -n "$DRY_RUN_FILE" ]]; then
     log_info "Mode:       dry-run (offline — using ${DRY_RUN_FILE})"
+  elif [[ "${SONAR_CLOUD:-false}" == "true" ]]; then
+    log_info "Mode:       SonarCloud"
+    log_info "URL:        ${SONAR_URL}"
+    [[ -n "$SONAR_ORGANIZATION" ]] && log_info "Org:        ${SONAR_ORGANIZATION}"
   else
+    log_info "Mode:       SonarQube"
     log_info "URL:        ${SONAR_URL}"
   fi
   log_info "Formats:    ${REPORT_FORMATS}"

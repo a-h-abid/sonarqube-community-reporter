@@ -248,16 +248,20 @@ fetch_all_metrics() {
   log_ok "Hotspot details fetched"
 
   local last_analysis_date=""
-  log_info "Fetching last analysis date ..."
-  if last_analysis_date=$(fetch_last_analysis_date); then
-    if [[ -n "$last_analysis_date" ]]; then
-      log_ok "Last analysis date fetched"
-    else
-      log_warn "Last analysis date is unavailable for this project"
-    fi
+  if [[ "${SONAR_CLOUD:-false}" == "true" ]]; then
+    log_info "Skipping last analysis date (not available on SonarCloud)"
   else
-    log_warn "Failed to fetch last analysis date; continuing without it"
-    last_analysis_date=""
+    log_info "Fetching last analysis date ..."
+    if last_analysis_date=$(fetch_last_analysis_date); then
+      if [[ -n "$last_analysis_date" ]]; then
+        log_ok "Last analysis date fetched"
+      else
+        log_warn "Last analysis date is unavailable for this project"
+      fi
+    else
+      log_warn "Failed to fetch last analysis date; continuing without it"
+      last_analysis_date=""
+    fi
   fi
 
   # Assemble the complete report data
@@ -280,6 +284,8 @@ fetch_all_metrics() {
     --arg reportDate "$report_date" \
     --arg lastAnalysisDate "$last_analysis_date" \
     --arg analysisId "${ANALYSIS_ID:-}" \
+    --argjson sonarCloud "${SONAR_CLOUD:-false}" \
+    --arg organization "${SONAR_ORGANIZATION:-}" \
     '{
       metadata: {
         projectKey: $projectKey,
@@ -288,7 +294,9 @@ fetch_all_metrics() {
         sonarUrl: $sonarUrl,
         reportDate: $reportDate,
         lastAnalysisDate: $lastAnalysisDate,
-        analysisId: $analysisId
+        analysisId: $analysisId,
+        sonarCloud: $sonarCloud,
+        organization: $organization
       },
       qualityGate: .[0],
       measures: .[1].measures,

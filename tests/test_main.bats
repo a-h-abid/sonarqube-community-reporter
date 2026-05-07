@@ -21,6 +21,9 @@ setup() {
   REPORT_FORMATS="json"
   SONAR_TOKEN=""
   SONAR_PROJECT_KEY=""
+  SONAR_URL="http://localhost:9000"
+  SONAR_ORGANIZATION=""
+  SONAR_CLOUD=false
   DRY_RUN_FILE=""
 }
 
@@ -143,4 +146,73 @@ setup() {
 @test "parse_args: --notify-webhook sets NOTIFY_WEBHOOK" {
   parse_args --notify-webhook "https://hooks.example.com/abc" --project-key "p"
   [ "$NOTIFY_WEBHOOK" = "https://hooks.example.com/abc" ]
+}
+
+@test "parse_args: --sonarcloud sets SONAR_CLOUD to true" {
+  parse_args --sonarcloud --project-key "p"
+  [ "$SONAR_CLOUD" = "true" ]
+}
+
+@test "parse_args: --organization sets SONAR_ORGANIZATION" {
+  parse_args --organization "my-org" --project-key "p"
+  [ "$SONAR_ORGANIZATION" = "my-org" ]
+}
+
+@test "parse_args: --sonarcloud and --organization together" {
+  parse_args --sonarcloud --organization "my-org" --project-key "p"
+  [ "$SONAR_CLOUD" = "true" ]
+  [ "$SONAR_ORGANIZATION" = "my-org" ]
+}
+
+# ===========================================================================
+# validate_params — SonarCloud mode
+# ===========================================================================
+
+@test "validate_params: SonarCloud mode fails when SONAR_ORGANIZATION is empty" {
+  SONAR_CLOUD=true
+  SONAR_TOKEN="mytoken"
+  SONAR_PROJECT_KEY="myproject"
+  SONAR_ORGANIZATION=""
+  REPORT_FORMATS="json"
+
+  run validate_params
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"SONAR_ORGANIZATION"* ]]
+}
+
+@test "validate_params: SonarCloud mode passes when SONAR_ORGANIZATION is set" {
+  SONAR_CLOUD=true
+  SONAR_TOKEN="mytoken"
+  SONAR_PROJECT_KEY="myproject"
+  SONAR_ORGANIZATION="my-org"
+  REPORT_FORMATS="json"
+
+  validate_params
+  [ "$?" -eq 0 ]
+}
+
+@test "validate_params: auto-detects SonarCloud when URL contains sonarcloud.io" {
+  SONAR_CLOUD=false
+  SONAR_URL="https://sonarcloud.io"
+  SONAR_TOKEN="mytoken"
+  SONAR_PROJECT_KEY="myproject"
+  SONAR_ORGANIZATION="my-org"
+  REPORT_FORMATS="json"
+
+  validate_params
+
+  [ "$SONAR_CLOUD" = "true" ]
+}
+
+@test "validate_params: SONAR_CLOUD remains false for non-SonarCloud URL" {
+  SONAR_CLOUD=false
+  SONAR_URL="http://sonar.example.com"
+  SONAR_TOKEN="mytoken"
+  SONAR_PROJECT_KEY="myproject"
+  SONAR_ORGANIZATION=""
+  REPORT_FORMATS="json"
+
+  validate_params
+
+  [ "$SONAR_CLOUD" = "false" ]
 }

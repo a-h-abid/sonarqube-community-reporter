@@ -24,6 +24,9 @@ source "${_WAIT_SCRIPT_DIR}/lib/api.sh"
 # wait_for_analysis
 #   Polls until the SonarQube background analysis is finished.
 #   Sets global ANALYSIS_ID on success.
+#
+#   SonarCloud does not expose CE endpoints (ce/task, ce/component).
+#   When SONAR_CLOUD=true this function returns immediately with a warning.
 # ---------------------------------------------------------------------------
 wait_for_analysis() {
   local interval="${POLL_INTERVAL:-5}"
@@ -31,6 +34,11 @@ wait_for_analysis() {
   local elapsed=0
 
   ANALYSIS_ID=""
+
+  if [[ "${SONAR_CLOUD:-false}" == "true" ]]; then
+    log_warn "--wait is not supported on SonarCloud; skipping CE polling"
+    return 0
+  fi
 
   if [[ -n "${SONAR_TASK_ID:-}" ]]; then
     _poll_by_task_id "$interval" "$timeout"

@@ -401,3 +401,240 @@ setup() {
   run sonar_api_paginated "issues/search" ".issues" 0
   [ "$status" -ne 0 ]
 }
+
+# ===========================================================================
+# detect_sonarcloud
+# ===========================================================================
+
+@test "detect_sonarcloud: sets SONAR_CLOUD=true for sonarcloud.io URL" {
+  SONAR_URL="https://sonarcloud.io"
+  SONAR_CLOUD=false
+
+  detect_sonarcloud
+
+  [ "$SONAR_CLOUD" = "true" ]
+}
+
+@test "detect_sonarcloud: sets SONAR_CLOUD=true for subdomain of sonarcloud.io" {
+  SONAR_URL="https://api.sonarcloud.io"
+  SONAR_CLOUD=false
+
+  detect_sonarcloud
+
+  [ "$SONAR_CLOUD" = "true" ]
+}
+
+@test "detect_sonarcloud: does not change SONAR_CLOUD for non-SonarCloud URL" {
+  SONAR_URL="http://sonar.example.com"
+  SONAR_CLOUD=false
+
+  detect_sonarcloud
+
+  [ "$SONAR_CLOUD" = "false" ]
+}
+
+@test "detect_sonarcloud: does not change SONAR_CLOUD for localhost URL" {
+  SONAR_URL="http://localhost:9000"
+  SONAR_CLOUD=false
+
+  detect_sonarcloud
+
+  [ "$SONAR_CLOUD" = "false" ]
+}
+
+@test "detect_sonarcloud: is idempotent — does not reset true to false" {
+  SONAR_URL="http://sonar.example.com"
+  SONAR_CLOUD=true
+
+  detect_sonarcloud
+
+  [ "$SONAR_CLOUD" = "true" ]
+}
+
+# ===========================================================================
+# sonar_api_get — organization injection
+# ===========================================================================
+
+@test "sonar_api_get: appends organization param when SONAR_ORGANIZATION is set (no existing query)" {
+  export _URL_FILE
+  _URL_FILE=$(mktemp)
+
+  curl() {
+    local args=("$@")
+    printf '%s' "${args[-1]}" >"$_URL_FILE"
+    local outfile=""
+    local i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+      if [[ "${args[$i]}" == "-o" ]]; then
+        outfile="${args[$((i + 1))]}"
+        i=$((i + 2))
+      else
+        i=$((i + 1))
+      fi
+    done
+    [[ -n "$outfile" ]] && printf '%s' "${MOCK_CURL_BODY:-}" >"$outfile"
+    printf '%s' "${MOCK_CURL_STATUS:-200}"
+  }
+  export -f curl
+
+  MOCK_CURL_STATUS="200"
+  MOCK_CURL_BODY='{"valid":true}'
+  export MOCK_CURL_STATUS MOCK_CURL_BODY
+  SONAR_ORGANIZATION="myorg"
+
+  run sonar_api_get "authentication/validate"
+  local called_url
+  called_url=$(cat "$_URL_FILE")
+  rm -f "$_URL_FILE"
+  [ "$status" -eq 0 ]
+  [[ "$called_url" == *"organization=myorg"* ]]
+}
+
+@test "sonar_api_get: appends organization param with & when endpoint already has query string" {
+  export _URL_FILE2
+  _URL_FILE2=$(mktemp)
+
+  curl() {
+    local args=("$@")
+    printf '%s' "${args[-1]}" >"$_URL_FILE2"
+    local outfile=""
+    local i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+      if [[ "${args[$i]}" == "-o" ]]; then
+        outfile="${args[$((i + 1))]}"
+        i=$((i + 2))
+      else
+        i=$((i + 1))
+      fi
+    done
+    [[ -n "$outfile" ]] && printf '%s' "${MOCK_CURL_BODY:-}" >"$outfile"
+    printf '%s' "${MOCK_CURL_STATUS:-200}"
+  }
+  export -f curl
+
+  MOCK_CURL_STATUS="200"
+  MOCK_CURL_BODY='{"status":"OK","conditions":[]}'
+  export MOCK_CURL_STATUS MOCK_CURL_BODY
+  SONAR_ORGANIZATION="my-org"
+
+  run sonar_api_get "qualitygates/project_status?projectKey=test-project"
+  local called_url
+  called_url=$(cat "$_URL_FILE2")
+  rm -f "$_URL_FILE2"
+  [ "$status" -eq 0 ]
+  [[ "$called_url" == *"&organization=my-org"* ]]
+}
+
+@test "sonar_api_get: does not append organization when SONAR_ORGANIZATION is empty" {
+  export _URL_FILE3
+  _URL_FILE3=$(mktemp)
+
+  curl() {
+    local args=("$@")
+    printf '%s' "${args[-1]}" >"$_URL_FILE3"
+    local outfile=""
+    local i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+      if [[ "${args[$i]}" == "-o" ]]; then
+        outfile="${args[$((i + 1))]}"
+        i=$((i + 2))
+      else
+        i=$((i + 1))
+      fi
+    done
+    [[ -n "$outfile" ]] && printf '%s' "${MOCK_CURL_BODY:-}" >"$outfile"
+    printf '%s' "${MOCK_CURL_STATUS:-200}"
+  }
+  export -f curl
+
+  MOCK_CURL_STATUS="200"
+  MOCK_CURL_BODY='{"status":"UP"}'
+  export MOCK_CURL_STATUS MOCK_CURL_BODY
+  SONAR_ORGANIZATION=""
+
+  run sonar_api_get "system/status"
+  local called_url
+  called_url=$(cat "$_URL_FILE3")
+  rm -f "$_URL_FILE3"
+  [ "$status" -eq 0 ]
+  [[ "$called_url" != *"organization="* ]]
+}
+
+# ===========================================================================
+# check_connectivity — SonarCloud mode
+# ===========================================================================
+
+@test "check_connectivity: SonarCloud mode succeeds using only authentication/validate" {
+  SONAR_CLOUD=true
+  SONAR_URL="https://sonarcloud.io"
+
+  sonar_api_get() {
+    case "$1" in
+      system/status)           echo "SHOULD_NOT_BE_CALLED"; return 1 ;;
+      authentication/validate) cat "${FIXTURES}/auth_validate.json" ;;
+    esac
+  }
+  export -f sonar_api_get
+
+  run check_connectivity
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"SHOULD_NOT_BE_CALLED"* ]]
+}
+
+@test "check_connectivity: SonarCloud mode fails when authentication/validate returns invalid" {
+  SONAR_CLOUD=true
+  SONAR_URL="https://sonarcloud.io"
+
+  sonar_api_get() {
+    case "$1" in
+      authentication/validate) cat "${FIXTURES}/auth_validate_invalid.json" ;;
+    esac
+  }
+  export -f sonar_api_get
+
+  run check_connectivity
+  [ "$status" -ne 0 ]
+}
+
+@test "check_connectivity: SonarCloud mode logs 'SonarCloud' on success" {
+  SONAR_CLOUD=true
+  SONAR_URL="https://sonarcloud.io"
+
+  sonar_api_get() {
+    case "$1" in
+      authentication/validate) cat "${FIXTURES}/auth_validate.json" ;;
+    esac
+  }
+  export -f sonar_api_get
+
+  run check_connectivity
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SonarCloud"* ]]
+}
+
+@test "check_connectivity: SonarCloud mode fails when authentication API call fails" {
+  SONAR_CLOUD=true
+  SONAR_URL="https://sonarcloud.io"
+
+  sonar_api_get() { return 1; }
+  export -f sonar_api_get
+
+  run check_connectivity
+  [ "$status" -ne 0 ]
+}
+
+@test "check_connectivity: auto-detects SonarCloud from URL and logs SonarCloud" {
+  SONAR_CLOUD=false
+  SONAR_URL="https://sonarcloud.io"
+
+  sonar_api_get() {
+    case "$1" in
+      authentication/validate) cat "${FIXTURES}/auth_validate.json" ;;
+    esac
+  }
+  export -f sonar_api_get
+
+  run check_connectivity
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"SonarCloud"* ]]
+}
