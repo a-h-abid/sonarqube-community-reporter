@@ -27,6 +27,8 @@ setup() {
   export SONAR_TOKEN="test-token"
   export SONAR_PROJECT_KEY="my-project"
   export SONAR_BRANCH=""
+  export SONAR_CLOUD=false
+  export SONAR_ORGANIZATION=""
 }
 
 # ===========================================================================
@@ -523,4 +525,134 @@ setup() {
 
   run fetch_all_metrics
   [ "$status" -ne 0 ]
+}
+
+# ===========================================================================
+# fetch_all_metrics — SonarCloud mode
+# ===========================================================================
+
+@test "fetch_all_metrics: SonarCloud mode does not call fetch_last_analysis_date" {
+  export SONAR_CLOUD=true
+  export _CALLED_FILE
+  _CALLED_FILE=$(mktemp)
+
+  fetch_quality_gate()       { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()           { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()     { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary()   { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()         { echo '[]'; }
+  fetch_all_hotspots()       { echo '[]'; }
+  fetch_last_analysis_date() { echo "called" >"$_CALLED_FILE"; echo '2024-01-14T09:30:00+0000'; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok
+
+  run fetch_all_metrics
+  local was_called
+  was_called=$(cat "$_CALLED_FILE")
+  rm -f "$_CALLED_FILE"
+  [ "$status" -eq 0 ]
+  [ -z "$was_called" ]
+}
+
+@test "fetch_all_metrics: SonarCloud mode produces empty lastAnalysisDate in metadata" {
+  export SONAR_CLOUD=true
+
+  fetch_quality_gate()     { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()         { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots log_info log_ok
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  last_date=$(echo "$output" | jq -r '.metadata.lastAnalysisDate')
+  [ -z "$last_date" ] || [ "$last_date" = "null" ]
+}
+
+@test "fetch_all_metrics: SonarCloud mode sets sonarCloud=true in metadata" {
+  export SONAR_CLOUD=true
+
+  fetch_quality_gate()     { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()         { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots log_info log_ok
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  sonar_cloud=$(echo "$output" | jq -r '.metadata.sonarCloud')
+  [ "$sonar_cloud" = "true" ]
+}
+
+@test "fetch_all_metrics: SonarCloud mode includes organization in metadata" {
+  export SONAR_CLOUD=true
+  export SONAR_ORGANIZATION="myorg"
+
+  fetch_quality_gate()     { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()         { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots log_info log_ok
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  org=$(echo "$output" | jq -r '.metadata.organization')
+  [ "$org" = "myorg" ]
+}
+
+@test "fetch_all_metrics: non-SonarCloud mode calls fetch_last_analysis_date" {
+  export SONAR_CLOUD=false
+  export _CALLED_FILE2
+  _CALLED_FILE2=$(mktemp)
+
+  fetch_quality_gate()       { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()           { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()     { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary()   { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()         { echo '[]'; }
+  fetch_all_hotspots()       { echo '[]'; }
+  fetch_last_analysis_date() { echo "called" >"$_CALLED_FILE2"; echo '2024-01-14T09:30:00+0000'; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok
+
+  run fetch_all_metrics
+  local was_called
+  was_called=$(cat "$_CALLED_FILE2")
+  rm -f "$_CALLED_FILE2"
+  [ "$status" -eq 0 ]
+  [ "$was_called" = "called" ]
+}
+
+@test "fetch_all_metrics: non-SonarCloud mode sets sonarCloud=false in metadata" {
+  export SONAR_CLOUD=false
+
+  fetch_quality_gate()       { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()           { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()     { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary()   { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()         { echo '[]'; }
+  fetch_all_hotspots()       { echo '[]'; }
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  sonar_cloud=$(echo "$output" | jq -r '.metadata.sonarCloud')
+  [ "$sonar_cloud" = "false" ]
 }

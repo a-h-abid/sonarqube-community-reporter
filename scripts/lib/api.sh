@@ -16,6 +16,31 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# SonarCloud configuration globals
+#   SONAR_CLOUD        — "true" when targeting SonarCloud; else "false"
+#   SONAR_ORGANIZATION — SonarCloud organization key (required when SONAR_CLOUD=true)
+# ---------------------------------------------------------------------------
+SONAR_CLOUD="${SONAR_CLOUD:-false}"
+SONAR_ORGANIZATION="${SONAR_ORGANIZATION:-}"
+
+# ---------------------------------------------------------------------------
+# detect_sonarcloud
+#   Sets SONAR_CLOUD=true when the host in SONAR_URL is exactly sonarcloud.io
+#   or a subdomain ending in .sonarcloud.io.
+#   Safe to call multiple times (idempotent — only ever sets true).
+# ---------------------------------------------------------------------------
+detect_sonarcloud() {
+  local url="${SONAR_URL:-}"
+  # Extract host by stripping scheme, path, and port
+  local host="${url#*://}"
+  host="${host%%/*}"
+  host="${host%%:*}"
+  if [[ "$host" == "sonarcloud.io" ]] || [[ "$host" == *.sonarcloud.io ]]; then
+    SONAR_CLOUD=true
+  fi
+}
+
+# ---------------------------------------------------------------------------
 # Logging helpers
 # ---------------------------------------------------------------------------
 log_info()  { echo -e "${CYAN}[INFO]${NC}  $*" >&2; }
@@ -25,12 +50,29 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
 # ---------------------------------------------------------------------------
 # sonar_api_get <endpoint> [extra_curl_args...]
-#   Makes an authenticated GET request to the SonarQube API.
+#   Makes an authenticated GET request to the SonarQube/SonarCloud API.
 #   Prints the JSON response body to stdout.
 #   Returns non-zero on HTTP errors (4xx/5xx).
+#
+#   When SONAR_ORGANIZATION is set the organization query parameter is
+#   appended automatically (required by most SonarCloud endpoints).
 # ---------------------------------------------------------------------------
 sonar_api_get() {
   local endpoint="$1"; shift
+
+  # Inject organization param transparently for SonarCloud.
+  # Skip injection when SONAR_ORGANIZATION is empty or when the endpoint
+  # already contains organization= (prevents duplicate parameters).
+  if [[ -n "${SONAR_ORGANIZATION:-}" ]] && [[ "$endpoint" != *"organization="* ]]; then
+    local org_encoded
+    org_encoded=$(printf '%s' "${SONAR_ORGANIZATION}" | jq -sRr @uri)
+    if [[ "$endpoint" == *"?"* ]]; then
+      endpoint="${endpoint}&organization=${org_encoded}"
+    else
+      endpoint="${endpoint}?organization=${org_encoded}"
+    fi
+  fi
+
   local url="${SONAR_URL}/api/${endpoint}"
   local http_code body
 
@@ -124,8 +166,12 @@ sonar_api_paginated() {
 
 # ---------------------------------------------------------------------------
 # check_connectivity
-#   Validates that SONAR_URL and SONAR_TOKEN are set, SonarQube is reachable,
+#   Validates that SONAR_URL and SONAR_TOKEN are set, the server is reachable,
 #   and the token is valid.
+#
+#   SonarCloud mode (SONAR_CLOUD=true or auto-detected from URL):
+#     Skips the system/status check (endpoint does not exist on SonarCloud)
+#     and validates only via authentication/validate.
 # ---------------------------------------------------------------------------
 check_connectivity() {
   if [[ -z "${SONAR_URL:-}" ]]; then
@@ -137,20 +183,24 @@ check_connectivity() {
     return 1
   fi
 
+  detect_sonarcloud
+
   log_info "Checking connectivity to ${SONAR_URL} ..."
 
-  local response
-  response=$(sonar_api_get "system/status") || {
-    log_error "Cannot reach SonarQube at ${SONAR_URL}"
-    return 1
-  }
+  if [[ "${SONAR_CLOUD:-false}" != "true" ]]; then
+    local response
+    response=$(sonar_api_get "system/status") || {
+      log_error "Cannot reach SonarQube at ${SONAR_URL}"
+      return 1
+    }
 
-  local status
-  status=$(echo "$response" | jq -r '.status // "UNKNOWN"')
+    local status
+    status=$(echo "$response" | jq -r '.status // "UNKNOWN"')
 
-  if [[ "$status" != "UP" ]]; then
-    log_error "SonarQube status is '${status}' (expected 'UP')"
-    return 1
+    if [[ "$status" != "UP" ]]; then
+      log_error "SonarQube status is '${status}' (expected 'UP')"
+      return 1
+    fi
   fi
 
   # Validate authentication by hitting a protected endpoint
@@ -168,7 +218,11 @@ check_connectivity() {
     return 1
   fi
 
-  log_ok "Connected to SonarQube (status: UP, auth: valid)"
+  if [[ "${SONAR_CLOUD:-false}" == "true" ]]; then
+    log_ok "Connected to SonarCloud (auth: valid)"
+  else
+    log_ok "Connected to SonarQube (status: UP, auth: valid)"
+  fi
 }
 
 # ---------------------------------------------------------------------------

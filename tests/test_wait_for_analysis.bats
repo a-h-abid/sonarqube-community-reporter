@@ -223,3 +223,45 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"poll_by_component_called"* ]]
 }
+
+# ===========================================================================
+# wait_for_analysis — SonarCloud bypass
+# ===========================================================================
+
+@test "wait_for_analysis: skips CE polling when SONAR_CLOUD is true" {
+  export SONAR_CLOUD=true
+  export SONAR_TASK_ID="some-task-id"
+
+  _poll_by_task_id()  { echo "SHOULD_NOT_BE_CALLED"; return 1; }
+  _poll_by_component() { echo "SHOULD_NOT_BE_CALLED"; return 1; }
+  export -f _poll_by_task_id _poll_by_component
+
+  run wait_for_analysis
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"SHOULD_NOT_BE_CALLED"* ]]
+}
+
+@test "wait_for_analysis: SONAR_CLOUD=true returns 0 even when no task ID" {
+  export SONAR_CLOUD=true
+  export SONAR_TASK_ID=""
+
+  _poll_by_component() { echo "SHOULD_NOT_BE_CALLED"; return 1; }
+  export -f _poll_by_component
+
+  run wait_for_analysis
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"SHOULD_NOT_BE_CALLED"* ]]
+}
+
+@test "wait_for_analysis: uses CE polling when SONAR_CLOUD is false" {
+  export SONAR_CLOUD=false
+  export SONAR_TASK_ID="some-task-id"
+
+  _poll_by_task_id()  { echo "poll_called"; }
+  _poll_by_component() { echo "SHOULD_NOT_BE_CALLED"; }
+  export -f _poll_by_task_id _poll_by_component
+
+  run wait_for_analysis
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"poll_called"* ]]
+}
