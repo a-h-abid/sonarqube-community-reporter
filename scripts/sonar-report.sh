@@ -91,7 +91,7 @@ REQUESTED_FORMATS=()
 # CLI Argument Parsing
 # ===========================================================================
 show_help() {
-  head -n 35 "$0" | grep '^#' | sed 's/^# \?//'
+  awk 'NR > 1 && /^[^#]/ { exit } NR > 1 { gsub(/^# ?/, ""); print }' "$0"
   exit 0
 }
 

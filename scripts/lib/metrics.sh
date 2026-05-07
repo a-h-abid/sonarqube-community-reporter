@@ -268,6 +268,10 @@ fetch_all_metrics() {
   local report_date
   report_date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 
+  # Normalize SONAR_CLOUD to a JSON boolean literal for jq --argjson
+  local sonar_cloud_bool="false"
+  [[ "${SONAR_CLOUD:-false}" == "true" ]] && sonar_cloud_bool="true"
+
   # Pipe large JSON data via stdin to avoid "Argument list too long" errors
   # when the issues list is large enough to exceed the OS ARG_MAX limit.
   {
@@ -284,7 +288,7 @@ fetch_all_metrics() {
     --arg reportDate "$report_date" \
     --arg lastAnalysisDate "$last_analysis_date" \
     --arg analysisId "${ANALYSIS_ID:-}" \
-    --argjson sonarCloud "${SONAR_CLOUD:-false}" \
+    --argjson sonarCloud "$sonar_cloud_bool" \
     --arg organization "${SONAR_ORGANIZATION:-}" \
     '{
       metadata: {
