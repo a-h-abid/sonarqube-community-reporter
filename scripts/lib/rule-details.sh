@@ -109,8 +109,8 @@ _split_legacy_htmldesc() {
   marked=$(printf '%s' "$html" | sed -E "s|<[Hh][1-6][^>]*>[[:space:]]*[Hh]ow to fix[^<]*</[Hh][1-6]>|${marker}|")
 
   if [[ "$marked" == *"$marker"* ]]; then
-    why_part="${marked%%${marker}*}"
-    fix_part="${marked#*${marker}}"
+    why_part="${marked%%"${marker}"*}"
+    fix_part="${marked#*"${marker}"}"
   fi
 
   jq -n --arg whyHtml "$why_part" --arg howToFixHtml "$fix_part" \

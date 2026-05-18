@@ -131,7 +131,9 @@ generate_html_report() {
       gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\""; "&quot;");
     def component_path:
       (. // "") as $component |
-      ($component | split(":") | last // "");
+      ($component | split(":") | last // "") as $path |
+      ($path | split("/")) as $parts |
+      if ($parts | length) > 3 then ".../" + ($parts[-3:] | join("/")) else $path end;
     def line_display(v):
       (v.startLine // v.line) as $s |
       (v.endLine // v.line) as $e |
@@ -200,7 +202,9 @@ generate_html_report() {
       gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\""; "&quot;");
     def component_path:
       (. // "") as $component |
-      ($component | split(":") | last // "");
+      ($component | split(":") | last // "") as $path |
+      ($path | split("/")) as $parts |
+      if ($parts | length) > 3 then ".../" + ($parts[-3:] | join("/")) else $path end;
     def line_display(v):
       (v.startLine // v.line) as $s |
       (v.endLine // v.line) as $e |

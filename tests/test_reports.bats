@@ -814,8 +814,8 @@ teardown() {
   run write_hotspots_csv "$_REPORT_DATA_FILE" "$hotspots_csv"
   [ "$status" -eq 0 ]
 
-  grep -q '"Key","Status","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"' "$hotspots_csv"
-  grep -q '"HS1","TO_REVIEW","HIGH","java:S3649","my-project:src/Db.java","21","Unsanitized SQL query","sql-injection","dev1","2024-01-15T09:00:00+0000","2024-01-15T09:00:00+0000"' "$hotspots_csv"
+  grep -q '"Key","Status","Resolution","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"' "$hotspots_csv"
+  grep -q '"HS1","TO_REVIEW","","HIGH","java:S3649","my-project:src/Db.java","21","Unsanitized SQL query","sql-injection","dev1","2024-01-15T09:00:00+0000","2024-01-15T09:00:00+0000"' "$hotspots_csv"
 
   rm -f "$hotspots_csv"
 }
@@ -1020,7 +1020,7 @@ teardown() {
   [ "$status" -eq 0 ]
   local n="${#lines[@]}"
   local hotspots_file="${lines[$((n-1))]}"
-  grep -q '"Key","Status","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"' "$hotspots_file"
+  grep -q '"Key","Status","Resolution","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"' "$hotspots_file"
 }
 
 @test "generate_csv_report: hotspots CSV contains hotspot data" {
