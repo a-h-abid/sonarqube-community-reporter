@@ -25,6 +25,9 @@ setup() {
   SONAR_ORGANIZATION=""
   SONAR_CLOUD=false
   DRY_RUN_FILE=""
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
 }
 
 @test "normalize_format: maps markdown alias to md" {
@@ -215,4 +218,91 @@ setup() {
   validate_params
 
   [ "$SONAR_CLOUD" = "false" ]
+}
+
+# ===========================================================================
+# parse_args — enrichment flags
+# ===========================================================================
+
+@test "parse_args: --include-rule-descriptions (bare) sets mode to short" {
+  parse_args --include-rule-descriptions --project-key "p"
+  [ "$INCLUDE_RULE_DESCRIPTIONS" = "short" ]
+}
+
+@test "parse_args: --include-rule-descriptions=full sets mode to full" {
+  parse_args --include-rule-descriptions=full --project-key "p"
+  [ "$INCLUDE_RULE_DESCRIPTIONS" = "full" ]
+}
+
+@test "parse_args: --include-rule-descriptions=short sets mode to short" {
+  parse_args --include-rule-descriptions=short --project-key "p"
+  [ "$INCLUDE_RULE_DESCRIPTIONS" = "short" ]
+}
+
+@test "parse_args: --include-code-snippets sets INCLUDE_CODE_SNIPPETS to true" {
+  parse_args --include-code-snippets --project-key "p"
+  [ "$INCLUDE_CODE_SNIPPETS" = "true" ]
+}
+
+@test "parse_args: --snippet-context sets SNIPPET_CONTEXT" {
+  parse_args --snippet-context 5 --project-key "p"
+  [ "$SNIPPET_CONTEXT" = "5" ]
+}
+
+# ===========================================================================
+# validate_enrichment_flags
+# ===========================================================================
+
+@test "validate_enrichment_flags: accepts empty mode (feature off)" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  run validate_enrichment_flags
+  [ "$status" -eq 0 ]
+}
+
+@test "validate_enrichment_flags: accepts short and full modes" {
+  INCLUDE_RULE_DESCRIPTIONS="short"
+  validate_enrichment_flags
+  [ "$?" -eq 0 ]
+
+  INCLUDE_RULE_DESCRIPTIONS="full"
+  validate_enrichment_flags
+  [ "$?" -eq 0 ]
+}
+
+@test "validate_enrichment_flags: rejects invalid mode" {
+  INCLUDE_RULE_DESCRIPTIONS="medium"
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  run validate_enrichment_flags
+  [ "$status" -ne 0 ]
+}
+
+@test "validate_enrichment_flags: normalizes INCLUDE_CODE_SNIPPETS to true/false" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="yes"
+  SNIPPET_CONTEXT="3"
+  validate_enrichment_flags
+  [ "$INCLUDE_CODE_SNIPPETS" = "true" ]
+
+  INCLUDE_CODE_SNIPPETS="0"
+  validate_enrichment_flags
+  [ "$INCLUDE_CODE_SNIPPETS" = "false" ]
+}
+
+@test "validate_enrichment_flags: rejects non-numeric SNIPPET_CONTEXT" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="abc"
+  run validate_enrichment_flags
+  [ "$status" -ne 0 ]
+}
+
+@test "validate_enrichment_flags: clamps very large SNIPPET_CONTEXT to 50" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="9999"
+  validate_enrichment_flags
+  [ "$SNIPPET_CONTEXT" = "50" ]
 }

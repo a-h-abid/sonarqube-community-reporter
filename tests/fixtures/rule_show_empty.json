@@ -1,0 +1,6 @@
+{
+  "rule": {
+    "key": "java:S0000",
+    "name": "Empty rule"
+  }
+}

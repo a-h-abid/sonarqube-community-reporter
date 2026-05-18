@@ -310,6 +310,102 @@ teardown() {
   grep -q "| \*\*Rating\*\* | C |" "$filepath"
 }
 
+@test "generate_md_report: shows line range when endLine > startLine on an issue" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.issues[0] += {startLine: 42, endLine: 47}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_md_report "$enriched" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q '^- Line: 42-47$' "$filepath"
+
+  rm -f "$enriched"
+}
+
+@test "generate_md_report: keeps single line format when endLine == startLine" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.issues[0] += {startLine: 42, endLine: 42}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_md_report "$enriched" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q '^- Line: 42$' "$filepath"
+
+  rm -f "$enriched"
+}
+
+@test "generate_md_report: renders Why section when ruleDescription present (short mode)" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "short", codeSnippets: false, snippetContext: 3}
+      | .issues[0] += {ruleDescription: {whyText: "Long version of why.", whyTextShort: "Short why."}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_md_report "$enriched" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "Why is this an issue" "$filepath"
+  grep -q "Short why." "$filepath"
+
+  rm -f "$enriched"
+}
+
+@test "generate_md_report: full mode uses whyText (not the short)" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "full", codeSnippets: false, snippetContext: 3}
+      | .issues[0] += {ruleDescription: {whyText: "Long version of why.", whyTextShort: "Short why."}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_md_report "$enriched" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "Long version of why" "$filepath"
+
+  rm -f "$enriched"
+}
+
+@test "generate_md_report: omits Why section when ruleDescription absent" {
+  run generate_md_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  ! grep -q "Why is this an issue" "$filepath"
+}
+
+@test "generate_md_report: does NOT include How to fix in Markdown" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "short", codeSnippets: false, snippetContext: 3}
+      | .issues[0] += {ruleDescription: {whyText: "Why.", whyTextShort: "Why.", howToFixText: "DO THE FIX", howToFixTextShort: "DO THE FIX"}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_md_report "$enriched" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  ! grep -q "How to fix" "$filepath"
+  ! grep -q "DO THE FIX" "$filepath"
+
+  rm -f "$enriched"
+}
+
+@test "generate_md_report: hotspot Risk section when ruleDescription.riskText present" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "short", codeSnippets: false, snippetContext: 3}
+      | .hotspots[0] += {ruleDescription: {riskText: "SQL injection risk explained."}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_md_report "$enriched" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "What's the risk" "$filepath"
+  grep -q "SQL injection risk explained" "$filepath"
+
+  rm -f "$enriched"
+}
+
 # ===========================================================================
 # generate_html_report
 # ===========================================================================
@@ -453,6 +549,119 @@ teardown() {
   grep -q 'class="issue-detail-row"' "$filepath"
 }
 
+@test "generate_html_report: renders line range when endLine > startLine in issue" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.issues[0] += {startLine: 42, endLine: 47}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_html_report "$enriched" "$_OUTPUT_DIR"
+  rm -f "$enriched"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q ">42-47<" "$filepath"
+}
+
+@test "generate_html_report: renders issue \"Why is this an issue?\" section when ruleDescription present" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "short", codeSnippets: false, snippetContext: 3}
+      | .issues[0] += {ruleDescription: {whyHtml: "<p>Because nulls are dangerous.</p>", whyText: "Because nulls are dangerous.", whyTextShort: "Because nulls are dangerous."}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_html_report "$enriched" "$_OUTPUT_DIR"
+  rm -f "$enriched"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "Why is this an issue" "$filepath"
+  grep -q "Because nulls are dangerous" "$filepath"
+}
+
+@test "generate_html_report: renders \"How to fix it\" section when ruleDescription.howToFixHtml present" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "short", codeSnippets: false, snippetContext: 3}
+      | .issues[0] += {ruleDescription: {whyHtml: "<p>w</p>", whyText: "w", whyTextShort: "w", howToFixHtml: "<p>Check for null first.</p>", howToFixText: "Check for null first.", howToFixTextShort: "Check for null first."}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_html_report "$enriched" "$_OUTPUT_DIR"
+  rm -f "$enriched"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "How to fix it" "$filepath"
+  grep -q "Check for null first" "$filepath"
+}
+
+@test "generate_html_report: renders code snippet block with highlighted lines" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "", codeSnippets: true, snippetContext: 1}
+      | .issues[0] += {codeSnippet: {startLine: 40, endLine: 44, lines: [
+          {n:40, text:"int x = 0;",        highlighted:false},
+          {n:41, text:"if (cond) {",       highlighted:false},
+          {n:42, text:"  return x.bar;",   highlighted:true},
+          {n:43, text:"}",                  highlighted:false},
+          {n:44, text:"// after",            highlighted:false}
+        ]}}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_html_report "$enriched" "$_OUTPUT_DIR"
+  rm -f "$enriched"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q 'class="code-snippet"' "$filepath"
+  grep -q 'code-line-hl' "$filepath"
+  grep -q "return x.bar" "$filepath"
+}
+
+@test "generate_html_report: code snippet escapes HTML in source text" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "", codeSnippets: true, snippetContext: 0}
+      | .issues[0] += {codeSnippet: {startLine: 1, endLine: 1, lines: [
+          {n:1, text:"if (a<b && c>d)", highlighted:true}
+        ]}}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_html_report "$enriched" "$_OUTPUT_DIR"
+  rm -f "$enriched"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "a&lt;b" "$filepath"
+  grep -q "c&gt;d" "$filepath"
+}
+
+@test "generate_html_report: omits enrichment sections when fields absent (back-compat)" {
+  run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  ! grep -q "Why is this an issue" "$filepath"
+  ! grep -q "How to fix" "$filepath"
+  ! grep -q 'class="code-snippet"' "$filepath"
+}
+
+@test "generate_html_report: template carries code snippet CSS classes" {
+  run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  # CSS classes for the new section markup
+  grep -q '\.code-snippet' "$filepath"
+  grep -q '\.code-line-hl' "$filepath"
+  grep -q '\.issue-section' "$filepath"
+}
+
+@test "generate_html_report: hotspot \"What's the risk?\" section uses riskText when present" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.metadata.enrichment = {ruleDescriptions: "short", codeSnippets: false, snippetContext: 3}
+      | .hotspots[0] += {ruleDescription: {riskText: "An attacker could read secrets.", whyHtml: "<p>w</p>", whyText: "w", whyTextShort: "w"}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_html_report "$enriched" "$_OUTPUT_DIR"
+  rm -f "$enriched"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "What's the risk" "$filepath"
+  grep -q "An attacker could read secrets" "$filepath"
+}
+
 @test "generate_html_report: shortens visible component paths in issues" {
   local tmp_component
   tmp_component=$(mktemp)
@@ -556,6 +765,49 @@ teardown() {
   rm -f "$issues_csv"
 }
 
+@test "write_issues_csv: appends End Line and Why columns at right edge" {
+  local issues_csv
+  issues_csv=$(mktemp)
+  run write_issues_csv "$_REPORT_DATA_FILE" "$issues_csv"
+  [ "$status" -eq 0 ]
+
+  # The header line must end with the new columns
+  head -1 "$issues_csv" | grep -q '"End Line","Why"$'
+
+  rm -f "$issues_csv"
+}
+
+@test "write_issues_csv: emits End Line value from .endLine when present" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.issues[0] += {endLine: 45, startLine: 42}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  local issues_csv
+  issues_csv=$(mktemp)
+  run write_issues_csv "$enriched" "$issues_csv"
+  [ "$status" -eq 0 ]
+
+  grep -q '"42","Null pointer dereference","30min","2024-01-15T10:00:00+0000","45"' "$issues_csv"
+
+  rm -f "$enriched" "$issues_csv"
+}
+
+@test "write_issues_csv: emits Why from ruleDescription.whyText when enriched" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.issues[0] += {ruleDescription: {whyText: "Null reference risks NPE", whyTextShort: "Null reference risks NPE"}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  local issues_csv
+  issues_csv=$(mktemp)
+  run write_issues_csv "$enriched" "$issues_csv"
+  [ "$status" -eq 0 ]
+
+  grep -q '"Null reference risks NPE"' "$issues_csv"
+
+  rm -f "$enriched" "$issues_csv"
+}
+
 @test "write_hotspots_csv: includes hotspot detail columns and review status" {
   local hotspots_csv
   hotspots_csv=$(mktemp)
@@ -566,6 +818,33 @@ teardown() {
   grep -q '"HS1","TO_REVIEW","HIGH","java:S3649","my-project:src/Db.java","21","Unsanitized SQL query","sql-injection","dev1","2024-01-15T09:00:00+0000","2024-01-15T09:00:00+0000"' "$hotspots_csv"
 
   rm -f "$hotspots_csv"
+}
+
+@test "write_hotspots_csv: appends End Line and Risk Why columns at right edge" {
+  local hotspots_csv
+  hotspots_csv=$(mktemp)
+  run write_hotspots_csv "$_REPORT_DATA_FILE" "$hotspots_csv"
+  [ "$status" -eq 0 ]
+
+  head -1 "$hotspots_csv" | grep -q '"End Line","Risk Why"$'
+
+  rm -f "$hotspots_csv"
+}
+
+@test "write_hotspots_csv: emits Risk Why from ruleDescription.riskText when enriched" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.hotspots[0] += {ruleDescription: {riskText: "SQL injection possible"}}' \
+    "$_REPORT_DATA_FILE" > "$enriched"
+
+  local hotspots_csv
+  hotspots_csv=$(mktemp)
+  run write_hotspots_csv "$enriched" "$hotspots_csv"
+  [ "$status" -eq 0 ]
+
+  grep -q '"SQL injection possible"' "$hotspots_csv"
+
+  rm -f "$enriched" "$hotspots_csv"
 }
 
 # ===========================================================================

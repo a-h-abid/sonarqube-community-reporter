@@ -1,0 +1,12 @@
+{
+  "rule": {
+    "key": "java:S3776",
+    "repo": "java",
+    "name": "Cognitive Complexity of methods should not be too high",
+    "createdAt": "2018-01-01T00:00:00+0000",
+    "htmlDesc": "<p>Cognitive Complexity is a measure of how hard the control flow of a method is to understand. Methods with high Cognitive Complexity will be difficult to maintain.</p><p>See the <em>Cognitive Complexity</em> white paper for more details.</p><h2>How to fix it</h2><p>Refactor the method to reduce branching and nested control flow. Extract helper methods where appropriate.</p><pre>// Before:\nif (x) { if (y) { ... } }\n// After:\nif (x &amp;&amp; y) { ... }</pre>",
+    "severity": "CRITICAL",
+    "status": "READY",
+    "type": "CODE_SMELL"
+  }
+}

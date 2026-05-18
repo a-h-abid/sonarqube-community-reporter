@@ -313,6 +313,44 @@ setup() {
   [ "$has_message" = "true" ]
 }
 
+@test "fetch_all_issues: derives startLine and endLine from textRange when present" {
+  sonar_api_paginated() { cat "${FIXTURES}/issues_page1.json" | jq '.issues'; }
+  export -f sonar_api_paginated
+
+  run fetch_all_issues
+  [ "$status" -eq 0 ]
+  # AXyz222 has a textRange{startLine:100,endLine:104}
+  start=$(echo "$output" | jq -r '.[] | select(.key=="AXyz222") | .startLine')
+  end=$(echo "$output" | jq -r '.[] | select(.key=="AXyz222") | .endLine')
+  [ "$start" = "100" ]
+  [ "$end" = "104" ]
+}
+
+@test "fetch_all_issues: startLine/endLine fall back to line when textRange absent" {
+  sonar_api_paginated() { cat "${FIXTURES}/issues_page1.json" | jq '.issues'; }
+  export -f sonar_api_paginated
+
+  run fetch_all_issues
+  [ "$status" -eq 0 ]
+  # AXyz111 has no textRange — both should equal line=42
+  start=$(echo "$output" | jq -r '.[] | select(.key=="AXyz111") | .startLine')
+  end=$(echo "$output" | jq -r '.[] | select(.key=="AXyz111") | .endLine')
+  [ "$start" = "42" ]
+  [ "$end" = "42" ]
+}
+
+@test "fetch_all_issues: keeps existing line field unchanged for back-compat" {
+  sonar_api_paginated() { cat "${FIXTURES}/issues_page1.json" | jq '.issues'; }
+  export -f sonar_api_paginated
+
+  run fetch_all_issues
+  [ "$status" -eq 0 ]
+  line1=$(echo "$output" | jq -r '.[] | select(.key=="AXyz111") | .line')
+  line2=$(echo "$output" | jq -r '.[] | select(.key=="AXyz222") | .line')
+  [ "$line1" = "42" ]
+  [ "$line2" = "100" ]
+}
+
 @test "fetch_all_issues: returns empty array when no issues" {
   sonar_api_paginated() { echo "[]"; }
   export -f sonar_api_paginated
@@ -635,6 +673,107 @@ setup() {
   rm -f "$_CALLED_FILE2"
   [ "$status" -eq 0 ]
   [ "$was_called" = "called" ]
+}
+
+# ===========================================================================
+# fetch_all_metrics — enrichment hook
+# ===========================================================================
+
+@test "fetch_all_metrics: omits metadata.enrichment when no flags set" {
+  unset INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS
+  fetch_quality_gate()     { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()         { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  has_enrich=$(echo "$output" | jq '.metadata | has("enrichment")')
+  [ "$has_enrich" = "false" ]
+}
+
+@test "fetch_all_metrics: metadata.enrichment reflects flag state when enabled" {
+  export INCLUDE_RULE_DESCRIPTIONS="short"
+  export INCLUDE_CODE_SNIPPETS="true"
+  export SNIPPET_CONTEXT="5"
+
+  fetch_quality_gate()     { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()         { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date log_info log_ok
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  rd=$(echo "$output" | jq -r '.metadata.enrichment.ruleDescriptions')
+  cs=$(echo "$output" | jq -r '.metadata.enrichment.codeSnippets')
+  ctx=$(echo "$output" | jq -r '.metadata.enrichment.snippetContext')
+  [ "$rd" = "short" ]
+  [ "$cs" = "true" ]
+  [ "$ctx" = "5" ]
+}
+
+@test "fetch_all_metrics: invokes enrich_issue_objects when INCLUDE_RULE_DESCRIPTIONS set" {
+  export INCLUDE_RULE_DESCRIPTIONS="short"
+  unset INCLUDE_CODE_SNIPPETS
+
+  fetch_quality_gate()     { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()         { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()       { echo '[{"key":"K1","rule":"java:S1","line":1,"startLine":1,"endLine":1,"component":"p:src/A.java"}]'; }
+  fetch_all_hotspots()     { echo '[]'; }
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+
+  enrich_issue_objects() {
+    # Tag the issue so we can verify the enrichment path was taken
+    echo "$1" | jq 'map(. + {ruleDescription: {whyText: "from mock"}})'
+  }
+  enrich_hotspot_objects() { echo "$1"; }
+  log_info() { :; }
+  log_ok()   { :; }
+  log_warn() { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date enrich_issue_objects enrich_hotspot_objects log_info log_ok log_warn
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  why=$(echo "$output" | jq -r '.issues[0].ruleDescription.whyText')
+  [ "$why" = "from mock" ]
+}
+
+@test "fetch_all_metrics: does not invoke enrich_issue_objects when flags off" {
+  unset INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS
+
+  fetch_quality_gate()     { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()         { echo '{"componentName":"My Project","componentKey":"my-project","qualifier":"TRK","measures":{}}'; }
+  fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()       { echo '[{"key":"K1","rule":"java:S1","line":1,"startLine":1,"endLine":1,"component":"p:src/A.java"}]'; }
+  fetch_all_hotspots()     { echo '[]'; }
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+
+  # If enrichment path runs, this mock would mutate the issue
+  enrich_issue_objects()   { echo '[{"key":"SHOULD_NOT_BE_CALLED"}]'; }
+  enrich_hotspot_objects() { echo "$1"; }
+  log_info() { :; }
+  log_ok()   { :; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary fetch_hotspots_summary fetch_all_issues fetch_all_hotspots fetch_last_analysis_date enrich_issue_objects enrich_hotspot_objects log_info log_ok
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  key=$(echo "$output" | jq -r '.issues[0].key')
+  [ "$key" = "K1" ]
 }
 
 @test "fetch_all_metrics: non-SonarCloud mode sets sonarCloud=false in metadata" {

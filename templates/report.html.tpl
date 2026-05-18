@@ -259,6 +259,108 @@
       white-space: nowrap;
     }
 
+    /* ---- Enrichment sections (rule description, code snippet, fix) ---- */
+    .issue-section,
+    .hotspot-section {
+      margin-top: 12px;
+      padding-top: 10px;
+      border-top: 1px dashed var(--color-border);
+    }
+    .issue-section-title,
+    .hotspot-section-title {
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 6px;
+    }
+    .issue-section-body,
+    .hotspot-section-body {
+      font-size: 0.88rem;
+      line-height: 1.5;
+      color: var(--color-text);
+    }
+    .issue-section-body p,
+    .hotspot-section-body p { margin: 0 0 6px 0; }
+    .issue-section-body p:last-child,
+    .hotspot-section-body p:last-child { margin-bottom: 0; }
+    .issue-section-body code,
+    .hotspot-section-body code,
+    .issue-section-body pre,
+    .hotspot-section-body pre {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      background: #f1f3f5;
+      border-radius: 3px;
+      font-size: 0.85em;
+    }
+    .issue-section-body code,
+    .hotspot-section-body code { padding: 1px 4px; }
+    .issue-section-body pre,
+    .hotspot-section-body pre {
+      padding: 8px 10px;
+      margin: 6px 0;
+      overflow-x: auto;
+      white-space: pre;
+    }
+    .issue-section-body ul,
+    .hotspot-section-body ul,
+    .issue-section-body ol,
+    .hotspot-section-body ol { padding-left: 22px; margin: 0 0 6px 0; }
+
+    /* ---- Code snippet block (HTML/PDF) ---- */
+    .code-snippet {
+      margin: 4px 0 0 0;
+      border: 1px solid var(--color-border);
+      border-radius: 6px;
+      overflow: hidden;
+      background: #fbfbfd;
+    }
+    .code-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      font-size: 0.82rem;
+      min-width: 0;
+    }
+    .code-table tr { background: transparent !important; }
+    .code-table td {
+      border: none !important;
+      padding: 0;
+      vertical-align: top;
+    }
+    .code-lineno {
+      width: 48px;
+      padding: 2px 8px 2px 10px !important;
+      text-align: right;
+      color: #adb5bd;
+      background: #f4f5f7;
+      border-right: 1px solid var(--color-border) !important;
+      user-select: none;
+    }
+    .code-text {
+      padding: 2px 10px !important;
+      width: auto;
+    }
+    .code-text pre {
+      margin: 0;
+      padding: 0;
+      background: transparent;
+      white-space: pre;
+      font-family: inherit;
+      font-size: inherit;
+      overflow-x: hidden;
+    }
+    .code-line-hl .code-lineno {
+      background: #fff5f5;
+      color: #c92a2a;
+      border-right: 3px solid #fa5252 !important;
+      font-weight: 700;
+    }
+    .code-line-hl .code-text {
+      background: #fff5f5;
+    }
+
     /* Severity badges */
     .sev { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; color: #fff; }
     .sev-BLOCKER { background: var(--color-blocker); }
@@ -427,6 +529,18 @@
       }
       .hotspot-detail-label {
         min-width: 64px;
+      }
+      .issue-section,
+      .hotspot-section,
+      .code-snippet {
+        break-inside: avoid !important;
+        page-break-inside: avoid !important;
+      }
+      .code-table { font-size: 0.75rem; }
+      .code-line-hl .code-lineno,
+      .code-line-hl .code-text {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
       }
     }
   </style>

@@ -64,7 +64,7 @@ write_issues_csv() {
   local issues_csv="$2"
 
   jq -r '
-    ["Key","Severity","Type","Rule","Component","Line","Message","Effort","Creation Date"],
+    ["Key","Severity","Type","Rule","Component","Line","Message","Effort","Creation Date","End Line","Why"],
     (
       .issues // []
       | .[]
@@ -77,7 +77,9 @@ write_issues_csv() {
           ((.line // "") | tostring),
           (.message // ""),
           (.effort // ""),
-          (.creationDate // "")
+          (.creationDate // ""),
+          ((.endLine // .line // "") | tostring),
+          (.ruleDescription.whyText // .ruleDescription.whyTextShort // "")
         ]
     )
     | @csv
@@ -93,7 +95,7 @@ write_hotspots_csv() {
   local hotspots_csv="$2"
 
   jq -r '
-    ["Key","Status","Resolution","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"],
+    ["Key","Status","Resolution","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date","End Line","Risk Why"],
     (
       .hotspots // []
       | .[]
@@ -109,7 +111,9 @@ write_hotspots_csv() {
           (.securityCategory // ""),
           (.author // ""),
           (.creationDate // ""),
-          (.updateDate // "")
+          (.updateDate // ""),
+          ((.endLine // .line // "") | tostring),
+          (.ruleDescription.riskText // .ruleDescription.whyText // .ruleDescription.whyTextShort // "")
         ]
     )
     | @csv

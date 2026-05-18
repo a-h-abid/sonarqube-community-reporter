@@ -11,6 +11,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 - **New Code Period** — Track metrics on newly added code
 - **Issues Details** — Lists all open issues with severity, type, rule, file/line details, and effort
 - **Security Hotspot Details** — Lists security hotspots with rule, file/line details, risk level, and review status
+- **Optional enrichment** — Add rule descriptions ("Why is this an issue?" / "How to fix it") and affected code snippets to issues and hotspots (opt-in via `--include-rule-descriptions` / `--include-code-snippets`)
 - **Analysis polling** — Waits for SonarQube Compute Engine to finish before fetching results
 - **Dry-run / offline mode** — Regenerate reports from a saved report data JSON file without making any API calls
 - **Webhook notifications** — Post a summary (quality gate, issue counts, report list) to any Slack, Teams, or generic incoming webhook URL after generation
@@ -116,6 +117,15 @@ Options:
                                                     (env: DRY_RUN_FILE)
   --notify-webhook URL   Post summary to a webhook after generation
                                                     (env: NOTIFY_WEBHOOK)
+  --include-rule-descriptions[=MODE]
+                         Include rule "Why is this an issue?" text (all formats).
+                         MODE: short (default — first paragraph) or full.
+                                                    (env: INCLUDE_RULE_DESCRIPTIONS)
+  --include-code-snippets
+                         Include affected code snippets in HTML/PDF.
+                                                    (env: INCLUDE_CODE_SNIPPETS)
+  --snippet-context N    Lines of context around the affected lines (default: 3)
+                                                    (env: SNIPPET_CONTEXT)
   -h, --help             Show help
 ```
 
@@ -171,6 +181,37 @@ export REPORT_FORMATS=json,md,html
 - `--organization` / `SONAR_ORGANIZATION` is **required** when targeting SonarCloud.
 - `--wait` is accepted but has no effect on SonarCloud (CE endpoints are not available); a warning is logged and execution continues normally.
 - SonarCloud is auto-detected from the URL, so `--sonarcloud` is optional when using `https://sonarcloud.io`.
+
+### Issue & Hotspot Enrichment
+
+By default, each issue and hotspot in the report shows only the basics returned by SonarQube's search APIs — rule ID, severity, message, file, line. Enable the optional enrichment flags to make the report self-contained:
+
+| Flag (env var) | Effect | Formats |
+|---|---|---|
+| `--include-rule-descriptions[=short\|full]` (`INCLUDE_RULE_DESCRIPTIONS`) | Adds **"Why is this an issue?"** / **"What's the risk?"** text on each issue and hotspot. `short` (default) shows only the first paragraph; `full` shows the entire section. | All formats |
+| `--include-code-snippets` (`INCLUDE_CODE_SNIPPETS`) | Embeds the affected code lines with surrounding context. The flagged lines are highlighted. | HTML/PDF only (data also in JSON) |
+| `--snippet-context N` (`SNIPPET_CONTEXT`, default `3`) | Number of context lines shown before/after the affected lines. | HTML/PDF |
+
+When `--include-rule-descriptions` is enabled, the **"How to fix it"** section is also rendered in HTML and PDF.
+
+Example:
+
+```bash
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 \
+  --token YOUR_TOKEN \
+  --project-key my-project \
+  --include-rule-descriptions=full \
+  --include-code-snippets \
+  --snippet-context 5 \
+  --formats html,pdf,json
+```
+
+**API cost.** Enabling these flags adds one `/api/rules/show` call per unique rule (issues) and `/api/hotspots/show` call per unique hotspot rule, plus one `/api/sources/raw` call per unique file (when snippets are on). Results are cached in-process so duplicates collapse to a single fetch. On a typical project with 200 issues across 30 rules and 50 files, expect ~85 extra API calls instead of 400.
+
+**Permissions.** Source snippet fetching requires the token to have *Browse* permission on the project. Missing rules or unavailable source files are skipped silently with a warning to stderr — the run never aborts on enrichment failures.
+
+**SonarQube version notes.** SonarQube 9.5+ exposes structured rule sections (`descriptionSections[]`) that cleanly separate "Why" and "How to fix"; older versions return a single `htmlDesc` and the split is heuristic.
 
 ### CSV Export
 
@@ -535,6 +576,9 @@ This tool uses the following SonarQube Web API endpoints:
 | `GET /api/measures/component` | Project metrics/measures |
 | `GET /api/issues/search` | Issues with facets |
 | `GET /api/hotspots/search` | Security hotspots |
+| `GET /api/rules/show` | Rule descriptions (only when `--include-rule-descriptions` is set) |
+| `GET /api/hotspots/show` | Hotspot rule descriptions (only when `--include-rule-descriptions` is set) |
+| `GET /api/sources/raw` | Source code for affected lines (only when `--include-code-snippets` is set) |
 
 Full API documentation is available at: `http://YOUR_SONARQUBE/web_api`
 

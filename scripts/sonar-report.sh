@@ -29,6 +29,16 @@
 #   --notify-webhook URL   Post a summary notification to a Slack/Teams/generic
 #                          webhook URL after report generation
 #                                                       (env: NOTIFY_WEBHOOK)
+#   --include-rule-descriptions[=MODE]
+#                          Include rule "Why is this an issue?" / "What's the
+#                          risk?" text. MODE: short (default — first paragraph)
+#                          or full (entire section).
+#                                                       (env: INCLUDE_RULE_DESCRIPTIONS)
+#   --include-code-snippets
+#                          Include affected code snippets in HTML/PDF reports.
+#                                                       (env: INCLUDE_CODE_SNIPPETS)
+#   --snippet-context N    Lines of context around the affected lines (default: 3)
+#                                                       (env: SNIPPET_CONTEXT)
 #   -h, --help             Show this help
 # HELP_END
 # ==============================================================================
@@ -84,6 +94,9 @@ POLL_TIMEOUT="${POLL_TIMEOUT:-300}"
 ANALYSIS_ID="${ANALYSIS_ID:-}"
 DRY_RUN_FILE="${DRY_RUN_FILE:-}"
 NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK:-}"
+INCLUDE_RULE_DESCRIPTIONS="${INCLUDE_RULE_DESCRIPTIONS:-}"
+INCLUDE_CODE_SNIPPETS="${INCLUDE_CODE_SNIPPETS:-false}"
+SNIPPET_CONTEXT="${SNIPPET_CONTEXT:-3}"
 
 WAIT_FOR_ANALYSIS=false
 FAIL_ON_GATE=false
@@ -116,6 +129,14 @@ parse_args() {
       --fail-on-gate)    FAIL_ON_GATE=true;       shift   ;;
       --dry-run)         DRY_RUN_FILE="$2";       shift 2 ;;
       --notify-webhook)  NOTIFY_WEBHOOK="$2";     shift 2 ;;
+      --include-rule-descriptions)
+        INCLUDE_RULE_DESCRIPTIONS="short"; shift ;;
+      --include-rule-descriptions=*)
+        INCLUDE_RULE_DESCRIPTIONS="${1#*=}"; shift ;;
+      --include-code-snippets)
+        INCLUDE_CODE_SNIPPETS=true;       shift ;;
+      --snippet-context)
+        SNIPPET_CONTEXT="$2";             shift 2 ;;
       -h|--help)         show_help ;;
       *)
         log_error "Unknown option: $1"
@@ -146,6 +167,37 @@ contains_value() {
   done
 
   return 1
+}
+
+validate_enrichment_flags() {
+  # Normalize INCLUDE_RULE_DESCRIPTIONS
+  case "${INCLUDE_RULE_DESCRIPTIONS:-}" in
+    "" | short | full) : ;;
+    *)
+      log_error "Invalid INCLUDE_RULE_DESCRIPTIONS value: '${INCLUDE_RULE_DESCRIPTIONS}' (expected short or full)"
+      return 1
+      ;;
+  esac
+
+  # Normalize INCLUDE_CODE_SNIPPETS to "true"/"false"
+  case "${INCLUDE_CODE_SNIPPETS:-false}" in
+    true|TRUE|yes|YES|1|on|ON)  INCLUDE_CODE_SNIPPETS="true"  ;;
+    false|FALSE|no|NO|0|off|OFF|"") INCLUDE_CODE_SNIPPETS="false" ;;
+    *)
+      log_error "Invalid INCLUDE_CODE_SNIPPETS value: '${INCLUDE_CODE_SNIPPETS}'"
+      return 1
+      ;;
+  esac
+
+  # Validate + clamp SNIPPET_CONTEXT
+  if ! [[ "${SNIPPET_CONTEXT:-3}" =~ ^[0-9]+$ ]]; then
+    log_error "SNIPPET_CONTEXT must be a non-negative integer (got '${SNIPPET_CONTEXT}')"
+    return 1
+  fi
+  if [[ "${SNIPPET_CONTEXT}" -gt 50 ]]; then
+    log_warn "SNIPPET_CONTEXT=${SNIPPET_CONTEXT} is unusually large — clamping to 50"
+    SNIPPET_CONTEXT=50
+  fi
 }
 
 validate_report_formats() {
@@ -246,6 +298,10 @@ validate_params() {
     errors=$((errors + 1))
   fi
 
+  if ! validate_enrichment_flags; then
+    errors=$((errors + 1))
+  fi
+
   if [[ "$errors" -gt 0 ]]; then
     echo ""
     log_info "Run with --help for usage information"
@@ -281,6 +337,12 @@ main() {
   fi
   log_info "Formats:    ${REPORT_FORMATS}"
   log_info "Output:     ${REPORT_OUTPUT_DIR}"
+  if [[ -n "${INCLUDE_RULE_DESCRIPTIONS:-}" ]]; then
+    log_info "Rule descriptions: ${INCLUDE_RULE_DESCRIPTIONS}"
+  fi
+  if [[ "${INCLUDE_CODE_SNIPPETS:-false}" == "true" ]]; then
+    log_info "Code snippets:    enabled (context=${SNIPPET_CONTEXT})"
+  fi
   echo ""
 
   # --- Step 1: Check connectivity (skipped in dry-run mode) ---

@@ -217,12 +217,27 @@ $(echo "$report_data" | jq -r '
 
 ## Security Hotspots Details
 
-$(echo "$report_data" | jq -r '
+$(echo "$report_data" | jq -r --arg envMode "${INCLUDE_RULE_DESCRIPTIONS:-}" '
+  (.metadata.enrichment.ruleDescriptions // $envMode // "") as $mode |
   def escape_md_text:
     gsub("<"; "&lt;") | gsub(">"; "&gt;");
   def component_path:
     (. // "") as $component |
     ($component | split(":") | last // "");
+  def line_display(v):
+    (v.startLine // v.line) as $s |
+    (v.endLine // v.line) as $e |
+    if ($s != null) and ($e != null) and (($e | tonumber? // 0) > ($s | tonumber? // 0))
+    then ($s | tostring) + "-" + ($e | tostring)
+    else ((v.line // v.startLine // "N/A") | tostring) end;
+  def why_text(v; m):
+    if v.ruleDescription then
+      (if m == "full" then (v.ruleDescription.whyText // v.ruleDescription.whyTextShort // "")
+                      else (v.ruleDescription.whyTextShort // v.ruleDescription.whyText // "")
+       end)
+    else "" end;
+  def risk_text(v):
+    (v.ruleDescription.riskText // "");
   if (.hotspots | length) > 0 then
     ([.hotspots | to_entries[]? |
       "### " + ((.key + 1) | tostring) + ". " + (.value.status // "?") +
@@ -231,9 +246,15 @@ $(echo "$report_data" | jq -r '
         " hotspot\n" +
       "- Risk: " + ((.value.vulnerabilityProbability // "N/A") | escape_md_text) + "\n" +
       "- Component: " + ((.value.component // "") | component_path | escape_md_text) + "\n" +
-      "- Line: " + ((.value.line // "N/A") | tostring) + "\n" +
+      "- Line: " + line_display(.value) + "\n" +
       "- Rule: " + ((.value.rule // "") | escape_md_text) + "\n" +
-      "- Message: " + ((.value.message // "") | escape_md_text)
+      "- Message: " + ((.value.message // "") | escape_md_text) +
+      (risk_text(.value) as $risk |
+        if $risk != "" then "\n\n**What'\''s the risk?**\n\n" + ($risk | escape_md_text)
+        else "" end) +
+      (why_text(.value; $mode) as $why |
+        if $why != "" then "\n\n**Why is this an issue?**\n\n" + ($why | escape_md_text)
+        else "" end)
     ] | join("\n\n"))
   else
     "_No security hotspots found._"
@@ -244,20 +265,36 @@ $(echo "$report_data" | jq -r '
 
 ## Issues Details
 
-$(echo "$report_data" | jq -r '
+$(echo "$report_data" | jq -r --arg envMode "${INCLUDE_RULE_DESCRIPTIONS:-}" '
+  (.metadata.enrichment.ruleDescriptions // $envMode // "") as $mode |
   def escape_md_text:
     gsub("<"; "&lt;") | gsub(">"; "&gt;");
   def component_path:
     (. // "") as $component |
     ($component | split(":") | last // "");
+  def line_display(v):
+    (v.startLine // v.line) as $s |
+    (v.endLine // v.line) as $e |
+    if ($s != null) and ($e != null) and (($e | tonumber? // 0) > ($s | tonumber? // 0))
+    then ($s | tostring) + "-" + ($e | tostring)
+    else ((v.line // v.startLine // "N/A") | tostring) end;
+  def why_text(v; m):
+    if v.ruleDescription then
+      (if m == "full" then (v.ruleDescription.whyText // v.ruleDescription.whyTextShort // "")
+                      else (v.ruleDescription.whyTextShort // v.ruleDescription.whyText // "")
+       end)
+    else "" end;
   if (.issues | length) > 0 then
     ([.issues | to_entries[]? |
       "### " + ((.key + 1) | tostring) + ". " + (.value.severity // "?") + " " + (.value.type // "?") + "\n" +
       "- Component: " + ((.value.component // "") | component_path | escape_md_text) + "\n" +
-      "- Line: " + ((.value.line // "N/A") | tostring) + "\n" +
+      "- Line: " + line_display(.value) + "\n" +
       "- Effort: " + ((.value.effort // "N/A") | escape_md_text) + "\n" +
       "- Rule: " + ((.value.rule // "") | escape_md_text) + "\n" +
-      "- Message: " + ((.value.message // "") | escape_md_text)
+      "- Message: " + ((.value.message // "") | escape_md_text) +
+      (why_text(.value; $mode) as $why |
+        if $why != "" then "\n\n**Why is this an issue?**\n\n" + ($why | escape_md_text)
+        else "" end)
     ] | join("\n\n"))
   else
     "_No open issues found._"

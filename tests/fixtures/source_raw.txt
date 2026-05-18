@@ -1,0 +1,29 @@
+package com.example;
+
+import java.util.List;
+
+public class Sample {
+
+    private final List<String> items;
+
+    public Sample(List<String> items) {
+        this.items = items;
+    }
+
+    public String firstUpper() {
+        String first = items.get(0);
+        return first.toUpperCase();
+    }
+
+    public boolean isEmpty() {
+        return items == null || items.isEmpty();
+    }
+
+    public int total() {
+        int sum = 0;
+        for (String s : items) {
+            sum += s.length();
+        }
+        return sum;
+    }
+}

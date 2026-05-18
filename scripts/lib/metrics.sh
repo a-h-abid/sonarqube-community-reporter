@@ -11,6 +11,8 @@ set -euo pipefail
 _METRICS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=api.sh
 source "${_METRICS_SCRIPT_DIR}/api.sh"
+# shellcheck source=rule-details.sh
+source "${_METRICS_SCRIPT_DIR}/rule-details.sh"
 
 # ---------------------------------------------------------------------------
 # Standard metric keys to fetch
@@ -151,6 +153,8 @@ fetch_all_issues() {
     message: .message,
     component: .component,
     line: .line,
+    startLine: (.textRange.startLine // .line),
+    endLine: (.textRange.endLine // .line),
     rule: .rule,
     effort: .effort,
     creationDate: .creationDate
@@ -189,6 +193,8 @@ fetch_all_hotspots() {
     message: (.message // .vulnerabilityDescription // ""),
     component: .component,
     line: .line,
+    startLine: (.textRange.startLine // .line),
+    endLine: (.textRange.endLine // .line),
     rule: (.ruleKey // .rule // ""),
     author: (.author // ""),
     creationDate: (.creationDate // ""),
@@ -248,6 +254,18 @@ fetch_all_metrics() {
   all_hotspots=$(fetch_all_hotspots) || { log_error "Failed to fetch hotspot details"; return 1; }
   log_ok "Hotspot details fetched"
 
+  if [[ -n "${INCLUDE_RULE_DESCRIPTIONS:-}" ]] || [[ "${INCLUDE_CODE_SNIPPETS:-false}" == "true" ]]; then
+    log_info "Enriching issue details ..."
+    all_issues=$(enrich_issue_objects "$all_issues") || \
+      log_warn "Issue enrichment partially failed — continuing"
+    log_ok "Issues enriched"
+
+    log_info "Enriching hotspot details ..."
+    all_hotspots=$(enrich_hotspot_objects "$all_hotspots") || \
+      log_warn "Hotspot enrichment partially failed — continuing"
+    log_ok "Hotspots enriched"
+  fi
+
   local last_analysis_date=""
   if [[ "${SONAR_CLOUD:-false}" == "true" ]]; then
     log_info "Skipping last analysis date (not available on SonarCloud)"
@@ -273,6 +291,18 @@ fetch_all_metrics() {
   local sonar_cloud_bool="false"
   [[ "${SONAR_CLOUD:-false}" == "true" ]] && sonar_cloud_bool="true"
 
+  # Build enrichment metadata block — only populated when any flag is on.
+  local enrichment_json="null"
+  if [[ -n "${INCLUDE_RULE_DESCRIPTIONS:-}" ]] || [[ "${INCLUDE_CODE_SNIPPETS:-false}" == "true" ]]; then
+    local cs_bool="false"
+    [[ "${INCLUDE_CODE_SNIPPETS:-false}" == "true" ]] && cs_bool="true"
+    enrichment_json=$(jq -n \
+      --arg ruleDescriptions "${INCLUDE_RULE_DESCRIPTIONS:-}" \
+      --argjson codeSnippets "$cs_bool" \
+      --argjson snippetContext "${SNIPPET_CONTEXT:-3}" \
+      '{ruleDescriptions: $ruleDescriptions, codeSnippets: $codeSnippets, snippetContext: $snippetContext}')
+  fi
+
   # Pipe large JSON data via stdin to avoid "Argument list too long" errors
   # when the issues list is large enough to exceed the OS ARG_MAX limit.
   {
@@ -291,8 +321,9 @@ fetch_all_metrics() {
     --arg analysisId "${ANALYSIS_ID:-}" \
     --argjson sonarCloud "$sonar_cloud_bool" \
     --arg organization "${SONAR_ORGANIZATION:-}" \
+    --argjson enrichment "$enrichment_json" \
     '{
-      metadata: {
+      metadata: ({
         projectKey: $projectKey,
         projectName: .[1].componentName,
         branch: $branch,
@@ -302,7 +333,7 @@ fetch_all_metrics() {
         analysisId: $analysisId,
         sonarCloud: $sonarCloud,
         organization: $organization
-      },
+      } + (if $enrichment == null then {} else {enrichment: $enrichment} end)),
       qualityGate: .[0],
       measures: .[1].measures,
       issuesSummary: .[2],

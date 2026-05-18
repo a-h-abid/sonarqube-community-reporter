@@ -1,0 +1,30 @@
+{
+  "key": "HS1",
+  "component": {
+    "key": "my-project:src/Db.java",
+    "qualifier": "FIL",
+    "name": "Db.java",
+    "longName": "src/Db.java",
+    "path": "src/Db.java"
+  },
+  "project": {
+    "key": "my-project",
+    "qualifier": "TRK",
+    "name": "My Project",
+    "longName": "My Project"
+  },
+  "rule": {
+    "key": "java:S3649",
+    "name": "Database queries should not be vulnerable to injection attacks",
+    "securityCategory": "sql-injection",
+    "vulnerabilityProbability": "HIGH",
+    "riskDescription": "<p>SQL injection occurs when untrusted data is concatenated into a SQL query without proper escaping. An attacker can manipulate the query to gain unauthorized access or destroy data.</p>",
+    "vulnerabilityDescription": "<p>Building queries via string concatenation makes it possible to inject malicious SQL. The application must validate and sanitize untrusted inputs before using them in SQL queries.</p><p>Affected queries should be reviewed and rewritten as parameterized statements.</p>",
+    "fixRecommendations": "<p>Use parameterized queries (<code>PreparedStatement</code> in Java) to keep data and code separate.</p><pre>PreparedStatement stmt = conn.prepareStatement(\"SELECT * FROM users WHERE id = ?\");\nstmt.setInt(1, userId);</pre><p>If parameterization is impossible, validate the input against a strict allowlist.</p>"
+  },
+  "status": "TO_REVIEW",
+  "line": 21,
+  "message": "Unsanitized SQL query",
+  "creationDate": "2024-01-15T09:00:00+0000",
+  "updateDate": "2024-01-15T09:00:00+0000"
+}

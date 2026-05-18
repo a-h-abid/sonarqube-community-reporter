@@ -20,6 +20,12 @@
       "message": "Method too complex",
       "component": "my-project:src/Utils.java",
       "line": 100,
+      "textRange": {
+        "startLine": 100,
+        "endLine": 104,
+        "startOffset": 4,
+        "endOffset": 12
+      },
       "rule": "java:S3776",
       "effort": "1h",
       "creationDate": "2024-01-10T08:00:00+0000"
