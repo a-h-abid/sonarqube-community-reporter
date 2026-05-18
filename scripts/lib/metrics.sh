@@ -183,6 +183,7 @@ fetch_all_hotspots() {
   } | jq -s 'add // [] | map({
     key: .key,
     status: .status,
+    resolution: (.resolution // ""),
     vulnerabilityProbability: (.vulnerabilityProbability // .probability // ""),
     securityCategory: (.securityCategory // ""),
     message: (.message // .vulnerabilityDescription // ""),

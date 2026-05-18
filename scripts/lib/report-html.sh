@@ -129,7 +129,11 @@ generate_html_report() {
       ([.hotspots | to_entries[]? |
         (.value.component // "") as $component |
         "<tbody class=\"hotspot-entry\"><tr class=\"hotspot-summary-row\"><td class=\"hotspot-index\">" + ((.key + 1) | tostring) + "</td>" +
-        "<td><span class=\"status-badge status-" + ((.value.status // "unknown") | ascii_downcase | gsub("_"; "-")) + "\">" + (.value.status // "?") + "</span></td>" +
+        "<td><span class=\"status-badge status-" + ((.value.status // "unknown") | ascii_downcase | gsub("_"; "-")) + "\">" + (.value.status // "?") + "</span>" +
+        (if (.value.status == "REVIEWED" and ((.value.resolution // "") != ""))
+         then " <span class=\"resolution-badge resolution-" + (.value.resolution | ascii_downcase) + "\">" + .value.resolution + "</span>"
+         else "" end) +
+        "</td>" +
         "<td>" + ((.value.vulnerabilityProbability // "N/A") | escape_html) + "</td>" +
         "<td class=\"hotspot-component\" title=\"" + ($component | escape_html) + "\"><span class=\"hotspot-component-path\">" + ($component | component_path | escape_html) + "</span></td>" +
         "<td>" + ((.value.line // "") | tostring) + "</td></tr>" +

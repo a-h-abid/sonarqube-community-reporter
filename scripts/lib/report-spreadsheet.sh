@@ -93,13 +93,14 @@ write_hotspots_csv() {
   local hotspots_csv="$2"
 
   jq -r '
-    ["Key","Status","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"],
+    ["Key","Status","Resolution","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date"],
     (
       .hotspots // []
       | .[]
       | [
           (.key // ""),
           (.status // ""),
+          (.resolution // ""),
           (.vulnerabilityProbability // ""),
           (.rule // ""),
           (.component // ""),

@@ -273,6 +273,11 @@
     .status-to-review { background: #fff3cd; color: #7c5700; }
     .status-unknown { background: #eceff1; color: #455a64; }
 
+    .resolution-badge { display: inline-block; margin-left: 4px; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
+    .resolution-fixed { background: #e3f2fd; color: #1565c0; }
+    .resolution-safe { background: #e0f7fa; color: #00695c; }
+    .resolution-acknowledged { background: #fff3e0; color: #8a4500; }
+
     /* Footer */
     .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--color-border); font-size: 0.8rem; color: var(--color-muted); text-align: center; }
 

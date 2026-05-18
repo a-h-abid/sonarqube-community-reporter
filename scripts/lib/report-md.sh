@@ -225,7 +225,10 @@ $(echo "$report_data" | jq -r '
     ($component | split(":") | last // "");
   if (.hotspots | length) > 0 then
     ([.hotspots | to_entries[]? |
-      "### " + ((.key + 1) | tostring) + ". " + (.value.status // "?") + " hotspot\n" +
+      "### " + ((.key + 1) | tostring) + ". " + (.value.status // "?") +
+        (if (.value.status == "REVIEWED" and ((.value.resolution // "") != ""))
+         then " (" + .value.resolution + ")" else "" end) +
+        " hotspot\n" +
       "- Risk: " + ((.value.vulnerabilityProbability // "N/A") | escape_md_text) + "\n" +
       "- Component: " + ((.value.component // "") | component_path | escape_md_text) + "\n" +
       "- Line: " + ((.value.line // "N/A") | tostring) + "\n" +
