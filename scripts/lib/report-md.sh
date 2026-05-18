@@ -220,21 +220,14 @@ $(echo "$report_data" | jq -r '
 $(echo "$report_data" | jq -r '
   def escape_md_text:
     gsub("<"; "&lt;") | gsub(">"; "&gt;");
-  def short_component:
+  def component_path:
     (. // "") as $component |
-    ($component | split(":")) as $parts |
-    ($parts | last // "") as $path |
-    ($path | split("/")) as $segments |
-    if ($segments | length) > 3 then
-      ".../" + ($segments[-3:] | join("/"))
-    else
-      $path
-    end;
+    ($component | split(":") | last // "");
   if (.hotspots | length) > 0 then
     ([.hotspots | to_entries[]? |
       "### " + ((.key + 1) | tostring) + ". " + (.value.status // "?") + " hotspot\n" +
       "- Risk: " + ((.value.vulnerabilityProbability // "N/A") | escape_md_text) + "\n" +
-      "- Component: " + ((.value.component // "") | short_component | escape_md_text) + "\n" +
+      "- Component: " + ((.value.component // "") | component_path | escape_md_text) + "\n" +
       "- Line: " + ((.value.line // "N/A") | tostring) + "\n" +
       "- Rule: " + ((.value.rule // "") | escape_md_text) + "\n" +
       "- Message: " + ((.value.message // "") | escape_md_text)
@@ -251,20 +244,13 @@ $(echo "$report_data" | jq -r '
 $(echo "$report_data" | jq -r '
   def escape_md_text:
     gsub("<"; "&lt;") | gsub(">"; "&gt;");
-  def short_component:
+  def component_path:
     (. // "") as $component |
-    ($component | split(":")) as $parts |
-    ($parts | last // "") as $path |
-    ($path | split("/")) as $segments |
-    if ($segments | length) > 3 then
-      ".../" + ($segments[-3:] | join("/"))
-    else
-      $path
-    end;
+    ($component | split(":") | last // "");
   if (.issues | length) > 0 then
     ([.issues | to_entries[]? |
       "### " + ((.key + 1) | tostring) + ". " + (.value.severity // "?") + " " + (.value.type // "?") + "\n" +
-      "- Component: " + ((.value.component // "") | short_component | escape_md_text) + "\n" +
+      "- Component: " + ((.value.component // "") | component_path | escape_md_text) + "\n" +
       "- Line: " + ((.value.line // "N/A") | tostring) + "\n" +
       "- Effort: " + ((.value.effort // "N/A") | escape_md_text) + "\n" +
       "- Rule: " + ((.value.rule // "") | escape_md_text) + "\n" +

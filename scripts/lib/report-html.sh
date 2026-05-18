@@ -121,16 +121,9 @@ generate_html_report() {
   hotspots_table=$(echo "$report_data" | jq -r '
     def escape_html:
       gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
-    def short_component:
+    def component_path:
       (. // "") as $component |
-      ($component | split(":")) as $parts |
-      ($parts | last // "") as $path |
-      ($path | split("/")) as $segments |
-      if ($segments | length) > 3 then
-        ".../" + ($segments[-3:] | join("/"))
-      else
-        $path
-      end;
+      ($component | split(":") | last // "");
     if (.hotspots | length) > 0 then
       "<div class=\"table-shell hotspots-shell\"><table class=\"hotspots-table\"><thead><tr><th>#</th><th>Status</th><th>Risk</th><th>Component</th><th>Line</th></tr></thead>" +
       ([.hotspots | to_entries[]? |
@@ -138,7 +131,7 @@ generate_html_report() {
         "<tbody class=\"hotspot-entry\"><tr class=\"hotspot-summary-row\"><td class=\"hotspot-index\">" + ((.key + 1) | tostring) + "</td>" +
         "<td><span class=\"status-badge status-" + ((.value.status // "unknown") | ascii_downcase | gsub("_"; "-")) + "\">" + (.value.status // "?") + "</span></td>" +
         "<td>" + ((.value.vulnerabilityProbability // "N/A") | escape_html) + "</td>" +
-        "<td class=\"hotspot-component\" title=\"" + ($component | escape_html) + "\"><span class=\"hotspot-component-path\">" + ($component | short_component | escape_html) + "</span></td>" +
+        "<td class=\"hotspot-component\" title=\"" + ($component | escape_html) + "\"><span class=\"hotspot-component-path\">" + ($component | component_path | escape_html) + "</span></td>" +
         "<td>" + ((.value.line // "") | tostring) + "</td></tr>" +
         "<tr class=\"hotspot-detail-row\"><td colspan=\"5\"><div class=\"hotspot-detail\"><div class=\"hotspot-detail-line\"><span class=\"hotspot-detail-label\">Rule</span><code>" + ((.value.rule // "") | escape_html) + "</code></div><div class=\"hotspot-detail-line hotspot-message-line\"><span class=\"hotspot-detail-label\">Message</span><span class=\"hotspot-detail-text\">" + ((.value.message // "") | escape_html) + "</span></div></div></td></tr></tbody>"
       ] | join("")) +
@@ -153,16 +146,9 @@ generate_html_report() {
   issues_table=$(echo "$report_data" | jq -r '
     def escape_html:
       gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
-    def short_component:
+    def component_path:
       (. // "") as $component |
-      ($component | split(":")) as $parts |
-      ($parts | last // "") as $path |
-      ($path | split("/")) as $segments |
-      if ($segments | length) > 3 then
-        ".../" + ($segments[-3:] | join("/"))
-      else
-        $path
-      end;
+      ($component | split(":") | last // "");
     if (.issues | length) > 0 then
       "<div class=\"table-shell issues-shell\"><table class=\"issues-table\"><thead><tr><th>#</th><th>Severity</th><th>Type</th><th>Component</th><th>Line</th><th>Effort</th></tr></thead>" +
       ([.issues | to_entries[]? |
@@ -170,7 +156,7 @@ generate_html_report() {
         "<tbody class=\"issue-entry\"><tr class=\"issue-summary-row\"><td class=\"issue-index\">" + ((.key + 1) | tostring) + "</td>" +
         "<td><span class=\"sev sev-" + (.value.severity // "INFO") + "\">" + (.value.severity // "?") + "</span></td>" +
         "<td><span class=\"type-badge\">" + (.value.type // "?") + "</span></td>" +
-        "<td class=\"issue-component\" title=\"" + ($component | escape_html) + "\"><span class=\"issue-component-path\">" + ($component | short_component | escape_html) + "</span></td>" +
+        "<td class=\"issue-component\" title=\"" + ($component | escape_html) + "\"><span class=\"issue-component-path\">" + ($component | component_path | escape_html) + "</span></td>" +
         "<td>" + ((.value.line // "") | tostring) + "</td>" +
         "<td>" + ((.value.effort // "N/A") | escape_html) + "</td></tr>" +
         "<tr class=\"issue-detail-row\"><td colspan=\"6\"><div class=\"issue-detail\"><div class=\"issue-detail-line\"><span class=\"issue-detail-label\">Rule</span><code>" + ((.value.rule // "") | escape_html) + "</code></div><div class=\"issue-detail-line issue-message-line\"><span class=\"issue-detail-label\">Message</span><span class=\"issue-detail-text\">" + ((.value.message // "") | escape_html) + "</span></div></div></td></tr></tbody>"
