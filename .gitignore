@@ -4,6 +4,11 @@ reports/
 # Environment
 .env
 
+# Config files (use .example files as templates)
+sonar-report.conf
+.sonar-report.yml
+.sonar-report.yaml
+
 # Logs
 *.log
 

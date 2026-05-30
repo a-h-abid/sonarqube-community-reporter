@@ -39,7 +39,15 @@
 #                                                       (env: INCLUDE_CODE_SNIPPETS)
 #   --snippet-context N    Lines of context around the affected lines (default: 3)
 #                                                       (env: SNIPPET_CONTEXT)
+#   --config FILE          Load configuration from FILE (default: auto-detect
+#                          .sonar-report.yml or sonar-report.conf)
 #   -h, --help             Show this help
+#
+# Configuration precedence (highest to lowest):
+#   1. CLI flags (--url, --token, etc.)
+#   2. Environment variables (SONAR_URL, SONAR_TOKEN, etc.)
+#   3. Config file (.sonar-report.yml or sonar-report.conf)
+#   4. Built-in defaults
 # HELP_END
 # ==============================================================================
 set -euo pipefail
@@ -56,6 +64,8 @@ fi
 # Source library modules
 # shellcheck source=lib/api.sh
 source "${_MAIN_SCRIPT_DIR}/lib/api.sh"
+# shellcheck source=lib/config.sh
+source "${_MAIN_SCRIPT_DIR}/lib/config.sh"
 # shellcheck source=lib/metrics.sh
 source "${_MAIN_SCRIPT_DIR}/lib/metrics.sh"
 # shellcheck source=lib/report-json.sh
@@ -129,6 +139,7 @@ parse_args() {
       --fail-on-gate)    FAIL_ON_GATE=true;       shift   ;;
       --dry-run)         DRY_RUN_FILE="$2";       shift 2 ;;
       --notify-webhook)  NOTIFY_WEBHOOK="$2";     shift 2 ;;
+      --config)          shift 2 ;;  # Handled in main() before parse_args
       --include-rule-descriptions)
         INCLUDE_RULE_DESCRIPTIONS="short"; shift ;;
       --include-rule-descriptions=*)
@@ -313,6 +324,30 @@ validate_params() {
 # Main
 # ===========================================================================
 main() {
+  # First pass: look for --config flag only (to load config early)
+  local explicit_config=""
+  for arg in "$@"; do
+    if [[ "$arg" == "--config" ]]; then
+      # Next arg after --config is the file path
+      local next_is_config=true
+      continue
+    fi
+    if [[ "${next_is_config:-false}" == "true" ]]; then
+      explicit_config="$arg"
+      break
+    fi
+  done
+
+  # Load config file (auto-detect or explicit)
+  # This happens after .env but before parse_args, so precedence is:
+  #   CLI args > env vars > config file > defaults
+  if [[ -n "$explicit_config" ]]; then
+    load_config_file "" "$explicit_config"
+  else
+    load_config_file "${_MAIN_SCRIPT_DIR}/.."
+  fi
+
+  # Second pass: parse all arguments
   parse_args "$@"
 
   echo ""

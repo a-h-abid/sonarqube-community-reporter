@@ -1,0 +1,76 @@
+# ==============================================================================
+# SonarQube Report Tool — YAML Configuration File
+# ==============================================================================
+# Copy this file to .sonar-report.yml and fill in the values:
+#   cp .sonar-report.yml.example .sonar-report.yml
+#
+# Configuration precedence (highest to lowest):
+#   1. CLI flags (--url, --token, etc.)
+#   2. Environment variables (SONAR_URL, SONAR_TOKEN, etc.)
+#   3. Config file values (this file)
+#   4. Built-in defaults
+# ==============================================================================
+
+# --- SonarQube/SonarCloud Connection -----------------------------------------
+sonar:
+  # Base URL of your SonarQube instance (no trailing slash)
+  url: http://localhost:9000
+
+  # Authentication token (generate at: SonarQube → My Account → Security → Tokens)
+  token: ""
+
+  # SonarQube project key to generate the report for
+  project_key: ""
+
+  # Branch name (leave empty for the main branch)
+  branch: ""
+
+  # SonarCloud organization key (required when using SonarCloud)
+  organization: ""
+
+  # Set to "true" if using SonarCloud (auto-detected from URL)
+  cloud: false
+
+  # Compute Engine task ID (optional — extracted from .scannerwork/report-task.txt)
+  task_id: ""
+
+# --- Report Output -----------------------------------------------------------
+report:
+  # Comma-separated list of formats: json,md,html,pdf,xlsx,ods,csv
+  formats: json,md,html,pdf,xlsx,ods
+
+  # Directory where reports are saved (relative or absolute)
+  output_dir: ./reports
+
+# --- Analysis Polling --------------------------------------------------------
+polling:
+  # Seconds between poll attempts when waiting for analysis completion
+  interval: 5
+
+  # Maximum seconds to wait before timing out
+  timeout: 300
+
+# --- Enrichment (rule descriptions & code snippets) --------------------------
+# Opt-in to richer issue/hotspot details. Each enabled enrichment adds API
+# calls per unique rule (and per unique file for code snippets), so the
+# default report stays minimal and fast.
+enrichment:
+  # Show "Why is this an issue?" / "What's the risk?" rule text on every issue
+  # and hotspot. Modes: empty (off), "short" (first paragraph only), or "full"
+  # (entire section). Appears in all formats. Also drives "How to fix it"
+  # rendering in HTML/PDF.
+  include_rule_descriptions: ""
+
+  # Include the affected code block in HTML/PDF reports. Set to "true" to enable.
+  include_code_snippets: false
+
+  # Lines of context shown before/after the affected lines in the code snippet.
+  snippet_context: 3
+
+# --- Additional Options ------------------------------------------------------
+options:
+  # Dry-run mode: skip API calls and regenerate reports from a saved JSON file
+  dry_run_file: ""
+
+  # Post a summary notification to a webhook URL after report generation
+  notify_webhook: ""
