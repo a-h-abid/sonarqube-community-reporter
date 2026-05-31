@@ -189,8 +189,8 @@ parse_yaml_config() {
       value="${BASH_REMATCH[2]}"
 
       # Strip inline comments (only when # is preceded by whitespace, per YAML spec)
-      # Skip stripping for quoted values to preserve # in tokens/URLs
-      if [[ ! "$value" =~ ^[\"\'] ]]; then
+      # Skip stripping for properly quoted values to preserve # in tokens/URLs
+      if [[ ! ("$value" =~ ^\".*\"$ || "$value" =~ ^\'.*\'$) ]]; then
         value="${value%% #*}"
       fi
 
