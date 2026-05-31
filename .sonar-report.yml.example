@@ -34,6 +34,9 @@ sonar:
   # Compute Engine task ID (optional — extracted from .scannerwork/report-task.txt)
   task_id: ""
 
+  # Analysis ID (optional — for reporting purposes)
+  analysis_id: ""
+
 # --- Report Output -----------------------------------------------------------
 report:
   # Comma-separated list of formats: json,md,html,pdf,xlsx,ods,csv
@@ -49,6 +52,9 @@ polling:
 
   # Maximum seconds to wait before timing out
   timeout: 300
+
+  # Whether to wait for analysis to complete before generating report
+  wait: false
 
 # --- Enrichment (rule descriptions & code snippets) --------------------------
 # Opt-in to richer issue/hotspot details. Each enabled enrichment adds API
@@ -74,3 +80,6 @@ options:
 
   # Post a summary notification to a webhook URL after report generation
   notify_webhook: ""
+
+  # Fail the script if the quality gate status is ERROR
+  fail_on_gate: false

@@ -41,7 +41,9 @@ is_allowed_key() {
     NOTIFY_WEBHOOK|\
     INCLUDE_RULE_DESCRIPTIONS|\
     INCLUDE_CODE_SNIPPETS|\
-    SNIPPET_CONTEXT)
+    SNIPPET_CONTEXT|\
+    WAIT_FOR_ANALYSIS|\
+    FAIL_ON_GATE)
       return 0
       ;;
     *)
@@ -86,7 +88,12 @@ set_config_var() {
     return 0
   fi
 
-  # Only set if not already set (env vars take precedence)
+  # Only set if not already set by environment (check snapshot)
+  if [[ " ${_ENV_SNAPSHOT_VARS:-} " == *" ${key} "* ]]; then
+    return 0
+  fi
+
+  # Only set if not already set by a previous config entry
   if [[ -z "${!key:-}" ]]; then
     local sanitized_value
     sanitized_value=$(sanitize_value "$value")
@@ -148,7 +155,7 @@ parse_shell_config() {
 #     polling.interval → POLL_INTERVAL
 #
 #   Supported sections:
-#     - sonar (url, token, project_key, branch, organization, cloud, task_id)
+#     - sonar (url, token, project_key, branch, organization, cloud, task_id, analysis_id)
 #     - report (formats, output_dir)
 #     - polling (interval, timeout, wait)
 #     - enrichment (include_rule_descriptions, include_code_snippets, snippet_context)
@@ -181,8 +188,11 @@ parse_yaml_config() {
       key="${BASH_REMATCH[1]}"
       value="${BASH_REMATCH[2]}"
 
-      # Strip inline comments
-      value="${value%%#*}"
+      # Strip inline comments (only when # is preceded by whitespace, per YAML spec)
+      # Skip stripping for quoted values to preserve # in tokens/URLs
+      if [[ ! "$value" =~ ^[\"\'] ]]; then
+        value="${value%% #*}"
+      fi
 
       # Strip leading/trailing whitespace
       value="${value#"${value%%[![:space:]]*}"}"
@@ -225,13 +235,16 @@ yaml_key_to_env_var() {
     sonar.organization)                 echo "SONAR_ORGANIZATION" ;;
     sonar.cloud)                        echo "SONAR_CLOUD" ;;
     sonar.task_id)                      echo "SONAR_TASK_ID" ;;
+    sonar.analysis_id)                  echo "ANALYSIS_ID" ;;
     report.formats)                     echo "REPORT_FORMATS" ;;
     report.output_dir)                  echo "REPORT_OUTPUT_DIR" ;;
     polling.interval)                   echo "POLL_INTERVAL" ;;
     polling.timeout)                    echo "POLL_TIMEOUT" ;;
+    polling.wait)                       echo "WAIT_FOR_ANALYSIS" ;;
     enrichment.include_rule_descriptions) echo "INCLUDE_RULE_DESCRIPTIONS" ;;
     enrichment.include_code_snippets)   echo "INCLUDE_CODE_SNIPPETS" ;;
     enrichment.snippet_context)         echo "SNIPPET_CONTEXT" ;;
+    options.fail_on_gate)               echo "FAIL_ON_GATE" ;;
     options.dry_run_file)               echo "DRY_RUN_FILE" ;;
     options.notify_webhook)             echo "NOTIFY_WEBHOOK" ;;
     *)                                  echo "" ;;
