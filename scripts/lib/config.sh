@@ -63,6 +63,7 @@ sanitize_value() {
 
   # Check for suspicious patterns that could indicate command injection
   # Use case statement for clearer pattern matching
+  # shellcheck disable=SC2016
   case "$value" in
     *'$('*|*'`'*|*';'*|*'|'*|*'&&'*)
       log_warn "Suspicious pattern detected in config value: ${value}"
