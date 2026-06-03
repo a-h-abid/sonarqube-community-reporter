@@ -77,3 +77,4 @@ bash tests/run_coverage.sh --min-coverage 90
 - The `reports/` directory is gitignored — only `.gitkeep` is tracked
 - PDF generation depends on `wkhtmltopdf` and `xvfb`; always handle the case where they are unavailable
 - The HTML report uses `templates/report.html.tpl` as its template — keep the template and generator in sync
+- For any temporary files, use the `tmp/` directory in this project root, do not go output this project directory.
