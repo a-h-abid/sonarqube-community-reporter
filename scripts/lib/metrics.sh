@@ -38,6 +38,7 @@ fetch_quality_gate() {
   local response
   response=$(sonar_api_get "qualitygates/project_status?projectKey=${project_key}${branch_param}") || return 1
 
+  # kcov-skip-start
   echo "$response" | jq '{
     status: .projectStatus.status,
     conditions: [
@@ -50,6 +51,7 @@ fetch_quality_gate() {
       }
     ]
   }'
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -66,6 +68,7 @@ fetch_measures() {
   response=$(sonar_api_get "measures/component?component=${project_key}&metricKeys=${METRIC_KEYS}${branch_param}") || return 1
 
   # Transform into a convenient key-value map
+  # kcov-skip-start
   echo "$response" | jq '{
     measures: (
       [.component.measures[]? | {(.metric): .value}] | add // {}
@@ -74,6 +77,7 @@ fetch_measures() {
     componentKey: .component.key,
     qualifier: .component.qualifier
   }'
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -89,6 +93,7 @@ fetch_issues_summary() {
   local response
   response=$(sonar_api_get "issues/search?componentKeys=${project_key}&issueStatuses=OPEN,CONFIRMED&facets=types,severities&ps=1${branch_param}") || return 1
 
+  # kcov-skip-start
   echo "$response" | jq '{
     total: .total,
     byType: (
@@ -98,6 +103,7 @@ fetch_issues_summary() {
       [.facets[]? | select(.property == "severities") | .values[]? | {(.val): .count}] | add // {}
     )
   }'
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -146,6 +152,7 @@ fetch_all_issues() {
   local all_issues
   all_issues=$(sonar_api_paginated "issues/search" ".issues" 20 "${params[@]}") || return 1
 
+  # kcov-skip-start
   echo "$all_issues" | jq '[.[]? | {
     key: .key,
     severity: .severity,
@@ -159,6 +166,7 @@ fetch_all_issues() {
     effort: .effort,
     creationDate: .creationDate
   }]'
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -181,6 +189,7 @@ fetch_all_hotspots() {
   local reviewed_hotspots
   reviewed_hotspots=$(sonar_api_paginated "hotspots/search" ".hotspots" 20 "${reviewed_params[@]}") || return 1
 
+  # kcov-skip-start
   {
     echo "$to_review_hotspots"
     echo "$reviewed_hotspots"
@@ -200,6 +209,7 @@ fetch_all_hotspots() {
     creationDate: (.creationDate // ""),
     updateDate: (.updateDate // "")
   })'
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -305,6 +315,7 @@ fetch_all_metrics() {
 
   # Pipe large JSON data via stdin to avoid "Argument list too long" errors
   # when the issues list is large enough to exceed the OS ARG_MAX limit.
+  # kcov-skip-start
   {
     echo "$quality_gate"
     echo "$measures"
@@ -341,4 +352,5 @@ fetch_all_metrics() {
       issues: .[4],
       hotspots: .[5]
     }'
+  # kcov-skip-end
 }

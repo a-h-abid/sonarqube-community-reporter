@@ -31,6 +31,7 @@ _SOURCE_CACHE_MAX_BYTES="${_SOURCE_CACHE_MAX_BYTES:-5242880}"  # 5 MB
 #   convert heading tags to bold paragraphs for compact display.
 # ---------------------------------------------------------------------------
 _normalize_rule_html() {
+  # kcov-skip-start
   sed -E '
     :join
     N
@@ -40,6 +41,7 @@ _normalize_rule_html() {
     s|<[Hh][1-6][^>]*>|<p><strong>|g
     s|</[Hh][1-6]>|</strong></p>|g
   '
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -50,6 +52,7 @@ _normalize_rule_html() {
 _html_to_text() {
   local input
   input=$(cat)
+  # kcov-skip-start
   printf '%s' "$input" | sed -E '
     s|<[Bb][Rr][[:space:]]*/?[[:space:]]*>|\n|g
     s|</[Pp]>|\n\n|g
@@ -78,6 +81,7 @@ _html_to_text() {
       print
     }
   '
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -85,10 +89,12 @@ _html_to_text() {
 #   Returns text up to the first blank line; collapses internal whitespace.
 # ---------------------------------------------------------------------------
 _first_paragraph() {
+  # kcov-skip-start
   awk '
     BEGIN { RS = "" }
     NR == 1 { gsub(/[[:space:]]+/, " "); sub(/^ /, ""); sub(/ $/, ""); print; exit }
   '
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -137,6 +143,7 @@ _build_section_object() {
   fix_text=$(printf '%s' "$fix_raw" | _html_to_text)
   fix_short=$(printf '%s' "$fix_text" | _first_paragraph)
 
+  # kcov-skip-start
   jq -n \
     --arg whyHtml "$why_html" \
     --arg whyText "$why_text" \
@@ -152,6 +159,7 @@ _build_section_object() {
       howToFixText: $howToFixText,
       howToFixTextShort: $howToFixTextShort
     }'
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -186,6 +194,7 @@ fetch_rule_details() {
   fi
 
   local why_raw fix_raw
+  # kcov-skip-start
   why_raw=$(echo "$response" | jq -r '
     if (.rule.descriptionSections // []) | length > 0 then
       [.rule.descriptionSections[]?
@@ -204,6 +213,7 @@ fetch_rule_details() {
       ""
     end
   ')
+  # kcov-skip-end
 
   if [[ -z "$why_raw" && -z "$fix_raw" ]]; then
     local html_desc
@@ -317,6 +327,7 @@ fetch_source_snippet() {
   [[ "$snip_start" -lt 1 ]] && snip_start=1
   local snip_end=$((end_line + context))
 
+  # kcov-skip-start
   printf '%s' "$raw" | awk -v s="$snip_start" -v e="$snip_end" \
                            -v hs="$start_line" -v he="$end_line" '
     BEGIN { printf "{\"startLine\":%d,\"endLine\":%d,\"lines\":[", s, e; sep="" }
@@ -334,6 +345,7 @@ fetch_source_snippet() {
     }
     END { printf "]}\n" }
   '
+  # kcov-skip-end
 }
 
 # ---------------------------------------------------------------------------
@@ -387,6 +399,7 @@ enrich_issue_objects() {
       snippet_obj=$(fetch_source_snippet "$component" "$start_line" "$end_line" "$context")
     fi
 
+    # kcov-skip-start
     echo "$issue" | jq -c \
       --argjson rule "$rule_obj" \
       --argjson snippet "$snippet_obj" \
@@ -394,6 +407,7 @@ enrich_issue_objects() {
         (if ($rule | type) == "object" and ($rule | length) > 0 then {ruleDescription: $rule} else {} end)
         + (if ($snippet | type) == "object" and ($snippet | length) > 0 then {codeSnippet: $snippet} else {} end)
       )' >> "$tmp_out"
+    # kcov-skip-end
   done < <(echo "$issues_json" | jq -c '.[]')
 
   jq -s '.' "$tmp_out"
@@ -444,6 +458,7 @@ enrich_hotspot_objects() {
       snippet_obj=$(fetch_source_snippet "$component" "$start_line" "$end_line" "$context")
     fi
 
+    # kcov-skip-start
     echo "$hotspot" | jq -c \
       --argjson rule "$rule_obj" \
       --argjson snippet "$snippet_obj" \
@@ -451,6 +466,7 @@ enrich_hotspot_objects() {
         (if ($rule | type) == "object" and ($rule | length) > 0 then {ruleDescription: $rule} else {} end)
         + (if ($snippet | type) == "object" and ($snippet | length) > 0 then {codeSnippet: $snippet} else {} end)
       )' >> "$tmp_out"
+    # kcov-skip-end
   done < <(echo "$hotspots_json" | jq -c '.[]')
 
   jq -s '.' "$tmp_out"

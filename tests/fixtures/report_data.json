@@ -1,0 +1,96 @@
+{
+  "metadata": {
+    "projectKey": "my-project",
+    "projectName": "My Project",
+    "branch": "main",
+    "sonarUrl": "http://sonar.example.com",
+    "reportDate": "2024-01-15T10:00:00Z",
+    "lastAnalysisDate": "2024-01-14T09:30:00+0000",
+    "analysisId": "AXyz_analysis_456"
+  },
+  "qualityGate": {
+    "status": "OK",
+    "conditions": [
+      {
+        "metric": "new_reliability_rating",
+        "status": "OK",
+        "actualValue": "1",
+        "errorThreshold": "1",
+        "comparator": "GT"
+      }
+    ]
+  },
+  "measures": {
+    "bugs": "2",
+    "vulnerabilities": "1",
+    "code_smells": "15",
+    "coverage": "78.5",
+    "duplicated_lines_density": "3.2",
+    "ncloc": "1234",
+    "sqale_index": "120",
+    "sqale_debt_ratio": "2.5",
+    "reliability_rating": "3.0",
+    "security_rating": "2.0",
+    "sqale_rating": "1.0",
+    "security_hotspots_reviewed": "100",
+    "security_review_rating": "1.0",
+    "alert_status": "OK",
+    "new_bugs": "0",
+    "new_vulnerabilities": "0",
+    "new_code_smells": "3",
+    "new_coverage": "85.0",
+    "new_duplicated_lines_density": "0.0"
+  },
+  "issuesSummary": {
+    "total": 18,
+    "byType": { "BUG": 2, "VULNERABILITY": 1, "CODE_SMELL": 15 },
+    "bySeverity": { "BLOCKER": 1, "CRITICAL": 2, "MAJOR": 5, "MINOR": 7, "INFO": 3 }
+  },
+  "hotspotsSummary": {
+    "total": 10,
+    "toReview": 3,
+    "reviewed": 7
+  },
+  "hotspots": [
+    {
+      "key": "HS1",
+      "status": "TO_REVIEW",
+      "vulnerabilityProbability": "HIGH",
+      "securityCategory": "sql-injection",
+      "message": "Unsanitized SQL query",
+      "component": "my-project:src/Db.java",
+      "line": 21,
+      "rule": "java:S3649",
+      "author": "dev1",
+      "creationDate": "2024-01-15T09:00:00+0000",
+      "updateDate": "2024-01-15T09:00:00+0000"
+    },
+    {
+      "key": "HS2",
+      "status": "REVIEWED",
+      "resolution": "SAFE",
+      "vulnerabilityProbability": "MEDIUM",
+      "securityCategory": "xss",
+      "message": "Template output needs review",
+      "component": "my-project:src/Web.java",
+      "line": 8,
+      "rule": "java:S5131",
+      "author": "dev2",
+      "creationDate": "2024-01-16T09:00:00+0000",
+      "updateDate": "2024-01-16T12:00:00+0000"
+    }
+  ],
+  "issues": [
+    {
+      "key": "AXyz111",
+      "severity": "CRITICAL",
+      "type": "BUG",
+      "message": "Null pointer dereference",
+      "component": "my-project:src/Main.java",
+      "line": 42,
+      "rule": "java:S2259",
+      "effort": "30min",
+      "creationDate": "2024-01-15T10:00:00+0000"
+    }
+  ]
+}

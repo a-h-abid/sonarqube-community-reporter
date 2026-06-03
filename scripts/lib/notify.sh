@@ -61,6 +61,7 @@ send_webhook_notification() {
   # Build a generic JSON payload compatible with Slack Incoming Webhooks.
   # Teams webhooks also accept a simple {"text": "..."} payload.
   local payload
+  # kcov-skip-start
   payload=$(jq -n \
     --arg project_name   "$project_name" \
     --arg project_key    "$project_key" \
@@ -90,6 +91,7 @@ send_webhook_notification() {
         if $files != "" then "\nGenerated: " + $files else "" end
       )
     }')
+  # kcov-skip-end
 
   local tmpfile
   tmpfile=$(mktemp)

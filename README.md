@@ -516,8 +516,8 @@ bash tests/run_tests.sh
 # Generate kcov HTML + Cobertura XML reports under reports/coverage
 bash tests/run_coverage.sh
 
-# Optional: fail if line coverage is below a threshold
-bash tests/run_coverage.sh --min-coverage 90
+# Optional: fail if line coverage is below a threshold (CI enforces 92%)
+bash tests/run_coverage.sh --min-coverage 92
 ```
 
 Coverage outputs:

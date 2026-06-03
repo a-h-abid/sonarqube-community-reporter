@@ -19,6 +19,7 @@ TEST_FILES=(
   "${SCRIPT_DIR}/test_reports.bats"
   "${SCRIPT_DIR}/test_notify.bats"
   "${SCRIPT_DIR}/test_config.bats"
+  "${SCRIPT_DIR}/test_integration.bats"
 )
 
 usage() {
@@ -94,13 +95,17 @@ for test_file in "${TEST_FILES[@]}"; do
     --clean \
     --include-pattern="${REPO_ROOT}/scripts" \
     --exclude-pattern="${REPO_ROOT}/tests,${REPO_ROOT}/reports" \
+    --exclude-region='kcov-skip-start:kcov-skip-end' \
     "${RAW_DIR}/${test_name}" \
     bats "${test_file}"
 done
 
 echo ""
 echo "Merging coverage reports..."
-kcov --clean --merge "${COVERAGE_DIR}" "${RAW_DIR}"/*
+# The --exclude-region flag must be repeated on the merge step: kcov re-derives
+# the instrumentable line set while merging and would otherwise re-include the
+# regions excluded during per-file collection.
+kcov --clean --merge --exclude-region='kcov-skip-start:kcov-skip-end' "${COVERAGE_DIR}" "${RAW_DIR}"/*
 
 # kcov output layout varies by version. Prefer normalized top-level outputs.
 COBERTURA_PATH=""

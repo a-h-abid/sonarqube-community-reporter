@@ -139,11 +139,28 @@ setup() {
   source "${REPO_ROOT}/scripts/lib/report-ods.sh"
   # shellcheck source=../scripts/lib/report-csv.sh
   source "${REPO_ROOT}/scripts/lib/report-csv.sh"
+  # shellcheck source=../scripts/lib/report-pdf.sh
+  source "${REPO_ROOT}/scripts/lib/report-pdf.sh"
+
+  # Fake wkhtmltopdf + ssconvert so PDF/spreadsheet success paths are fast and
+  # deterministic (the real renderers are slow and depend on xvfb / gnumeric).
+  export _FAKE_BIN
+  _FAKE_BIN=$(mktemp -d)
+  cat > "$_FAKE_BIN/wkhtmltopdf" <<'SH'
+#!/usr/bin/env bash
+out="${@: -1}"; printf '%%PDF-1.4 fake' > "$out"
+SH
+  cat > "$_FAKE_BIN/ssconvert" <<'SH'
+#!/usr/bin/env bash
+for a in "$@"; do case "$a" in --merge-to=*) printf 'x' > "${a#--merge-to=}" ;; esac; done
+SH
+  chmod +x "$_FAKE_BIN/wkhtmltopdf" "$_FAKE_BIN/ssconvert"
 }
 
 teardown() {
   rm -rf "$_OUTPUT_DIR"
   rm -f "$_REPORT_DATA_FILE"
+  rm -rf "$_FAKE_BIN"
 }
 
 # ===========================================================================
@@ -1056,4 +1073,106 @@ teardown() {
   [ "$status" -eq 0 ]
   local n="${#lines[@]}"
   [[ "${lines[$((n-1))]}" == *_hotspots.csv ]]
+}
+
+# ===========================================================================
+# generate_csv_report — error branches
+# ===========================================================================
+
+@test "generate_csv_report: fails when summary CSV write fails" {
+  write_summary_csv() { return 1; }
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to generate CSV summary"* ]]
+}
+
+@test "generate_csv_report: fails when issues CSV write fails" {
+  write_issues_csv() { return 1; }
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to generate CSV issues"* ]]
+}
+
+@test "generate_csv_report: fails when hotspots CSV write fails" {
+  write_hotspots_csv() { return 1; }
+  run generate_csv_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to generate CSV hotspots"* ]]
+}
+
+# ===========================================================================
+# generate_pdf_report
+# ===========================================================================
+
+@test "generate_pdf_report: errors when html file is missing" {
+  PATH="$_FAKE_BIN:$PATH" run generate_pdf_report "/no/such/file.html" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"HTML file not found"* ]]
+}
+
+@test "generate_pdf_report: converts html to pdf when wkhtmltopdf present" {
+  local html="$_OUTPUT_DIR/in.html"
+  printf '<html><head></head><body>hi</body></html>' > "$html"
+  PATH="$_FAKE_BIN:$PATH" run generate_pdf_report "$html" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "${lines[-1]}" == *.pdf ]]
+  [ -f "${lines[-1]}" ]
+}
+
+@test "generate_pdf_report: reports failure when wkhtmltopdf fails" {
+  local faildir; faildir=$(mktemp -d)
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$faildir/wkhtmltopdf"
+  chmod +x "$faildir/wkhtmltopdf"
+  local html="$_OUTPUT_DIR/in.html"
+  printf '<html><head></head><body>x</body></html>' > "$html"
+  PATH="$faildir:$PATH" run generate_pdf_report "$html" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"wkhtmltopdf failed"* ]]
+  rm -rf "$faildir"
+}
+
+# ===========================================================================
+# generate_spreadsheet_report — skip + error branches
+# ===========================================================================
+
+@test "generate_spreadsheet_report: skips when converter is absent" {
+  SSCONVERT_BIN="/nonexistent/ssconvert" run generate_spreadsheet_report \
+    "$_REPORT_DATA_FILE" "$_OUTPUT_DIR" "xlsx"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"not found"* ]]
+}
+
+@test "generate_spreadsheet_report: fails when summary sheet prep fails" {
+  write_summary_csv() { return 1; }
+  SSCONVERT_BIN="$_FAKE_BIN/ssconvert" run generate_spreadsheet_report \
+    "$_REPORT_DATA_FILE" "$_OUTPUT_DIR" "xlsx"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to prepare summary sheet"* ]]
+}
+
+@test "generate_spreadsheet_report: fails when issues sheet prep fails" {
+  write_issues_csv() { return 1; }
+  SSCONVERT_BIN="$_FAKE_BIN/ssconvert" run generate_spreadsheet_report \
+    "$_REPORT_DATA_FILE" "$_OUTPUT_DIR" "xlsx"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to prepare issues sheet"* ]]
+}
+
+@test "generate_spreadsheet_report: fails when hotspots sheet prep fails" {
+  write_hotspots_csv() { return 1; }
+  SSCONVERT_BIN="$_FAKE_BIN/ssconvert" run generate_spreadsheet_report \
+    "$_REPORT_DATA_FILE" "$_OUTPUT_DIR" "xlsx"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to prepare hotspots sheet"* ]]
+}
+
+@test "generate_spreadsheet_report: reports converter failure" {
+  local faildir; faildir=$(mktemp -d)
+  printf '#!/usr/bin/env bash\nexit 1\n' > "$faildir/ssconvert"
+  chmod +x "$faildir/ssconvert"
+  SSCONVERT_BIN="$faildir/ssconvert" run generate_spreadsheet_report \
+    "$_REPORT_DATA_FILE" "$_OUTPUT_DIR" "xlsx"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"failed to generate"* ]]
+  rm -rf "$faildir"
 }

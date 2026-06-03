@@ -189,3 +189,11 @@ teardown() {
   has_text=$(jq 'has("text")' "$_PAYLOAD_FILE")
   [ "$has_text" = "true" ]
 }
+
+@test "send_webhook_notification: errors when curl invocation fails" {
+  curl() { return 7; }
+  export -f curl
+  run send_webhook_notification "https://hooks.example.com/test" "$_REPORT_DATA_FILE"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to reach webhook URL"* ]]
+}

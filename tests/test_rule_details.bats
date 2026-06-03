@@ -469,3 +469,73 @@ setup() {
   has_risk=$(echo "$output" | jq '.[0].ruleDescription | has("riskText")')
   [ "$has_risk" = "true" ]
 }
+
+# ==============================================================================
+# Additional edge / branch coverage
+# ==============================================================================
+
+@test "fetch_hotspot_details: returns empty object when hotspot key missing" {
+  run fetch_hotspot_details "" "java:S1"
+  [ "$status" -eq 0 ]
+  [ "$output" = "{}" ]
+}
+
+@test "fetch_source_snippet: defaults end_line to start_line when missing" {
+  sonar_api_get() { printf 'l1\nl2\nl3\nl4\nl5\n'; }
+  export -f sonar_api_get
+  run fetch_source_snippet "p:F.java" "3" "" "1"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"endLine"'* ]]
+}
+
+@test "fetch_source_snippet: returns empty for non-numeric line" {
+  run fetch_source_snippet "p:F.java" "abc" "5" "3"
+  [ "$status" -eq 0 ]
+  [ "$output" = "{}" ]
+}
+
+@test "fetch_source_snippet: clamps non-numeric context to default" {
+  sonar_api_get() { printf 'a\nb\nc\nd\ne\nf\ng\n'; }
+  export -f sonar_api_get
+  run fetch_source_snippet "p:F.java" "4" "4" "xyz"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *'"lines"'* ]]
+}
+
+@test "enrich_issue_objects: pre-fetches rule details when descriptions enabled" {
+  export INCLUDE_RULE_DESCRIPTIONS="short"
+  export INCLUDE_CODE_SNIPPETS="false"
+  sonar_api_get() { cat "${FIXTURES}/rule_show.json"; }
+  export -f sonar_api_get
+  local issues='[{"key":"I1","rule":"java:S2259","component":"p:Main.java","line":42,"startLine":42,"endLine":42}]'
+  run enrich_issue_objects "$issues"
+  [ "$status" -eq 0 ]
+  has_rd=$(echo "$output" | jq '.[0] | has("ruleDescription")')
+  [ "$has_rd" = "true" ]
+}
+
+@test "enrich_issue_objects: includes code snippet when snippets enabled" {
+  export INCLUDE_RULE_DESCRIPTIONS=""
+  export INCLUDE_CODE_SNIPPETS="true"
+  export SNIPPET_CONTEXT="2"
+  sonar_api_get() { printf 'l1\nl2\nl3\nl4\nl5\n'; }
+  export -f sonar_api_get
+  local issues='[{"key":"I1","rule":"java:S1","component":"p:Main.java","line":3,"startLine":3,"endLine":3}]'
+  run enrich_issue_objects "$issues"
+  [ "$status" -eq 0 ]
+  has_cs=$(echo "$output" | jq '.[0] | has("codeSnippet")')
+  [ "$has_cs" = "true" ]
+}
+
+@test "enrich_hotspot_objects: includes code snippet when snippets enabled" {
+  export INCLUDE_RULE_DESCRIPTIONS=""
+  export INCLUDE_CODE_SNIPPETS="true"
+  export SNIPPET_CONTEXT="2"
+  sonar_api_get() { printf 'a\nb\nc\nd\ne\n'; }
+  export -f sonar_api_get
+  local hs='[{"key":"HS1","rule":"java:S3649","component":"p:Db.java","line":3,"startLine":3,"endLine":3}]'
+  run enrich_hotspot_objects "$hs"
+  [ "$status" -eq 0 ]
+  has_cs=$(echo "$output" | jq '.[0] | has("codeSnippet")')
+  [ "$has_cs" = "true" ]
+}

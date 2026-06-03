@@ -55,20 +55,7 @@ generate_html_report() {
 
   # Quality gate conditions table
   local qg_conditions_table
-  qg_conditions_table=$(echo "$report_data" | jq -r '
-    if (.qualityGate.conditions | length) > 0 then
-      "<table><tr><th>Metric</th><th>Status</th><th>Value</th><th>Threshold</th></tr>" +
-      ([.qualityGate.conditions[]? |
-        "<tr><td>" + .metric + "</td>" +
-        "<td class=\"cond-" + (.status | ascii_downcase) + "\">" + .status + "</td>" +
-        "<td>" + (.actualValue // "N/A") + "</td>" +
-        "<td>" + (.errorThreshold // "N/A") + "</td></tr>"
-      ] | join("")) +
-      "</table>"
-    else
-      "<p><em>No conditions configured.</em></p>"
-    end
-  ')
+  qg_conditions_table=$(echo "$report_data" | jq -r -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-qg-conditions.jq")
 
   # Measures
   local bugs vulns smells coverage duplication loc tech_debt debt_ratio
@@ -118,148 +105,15 @@ generate_html_report() {
 
   # Determine rule-description display mode: metadata takes precedence over env.
   local rule_mode
-  rule_mode=$(echo "$report_data" | jq -r --arg envMode "${INCLUDE_RULE_DESCRIPTIONS:-}" '
-    .metadata.enrichment.ruleDescriptions // $envMode // ""
-  ')
+  rule_mode=$(echo "$report_data" | jq -r --arg envMode "${INCLUDE_RULE_DESCRIPTIONS:-}" -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-rule-mode.jq")
 
   # Hotspots details table
   local hotspots_table
-  hotspots_table=$(echo "$report_data" | jq -r --arg mode "$rule_mode" '
-    def escape_html:
-      gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
-    def escape_attr:
-      gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\""; "&quot;");
-    def component_path:
-      # Show the full path from the project root. The component key is
-      # "<projectKey>:<path>"; the path is the final colon-separated segment
-      # (project/module keys may themselves contain colons, but paths do not).
-      (. // "") as $component |
-      ($component | split(":") | last // "");
-    def line_display(v):
-      (v.startLine // v.line) as $s |
-      (v.endLine // v.line) as $e |
-      if ($s != null) and ($e != null) and (($e | tonumber? // 0) > ($s | tonumber? // 0))
-      then ($s | tostring) + "-" + ($e | tostring)
-      else ((v.line // v.startLine // "") | tostring) end;
-    def why_html(v; m):
-      if v.ruleDescription then
-        (if m == "full" then (v.ruleDescription.whyHtml // (v.ruleDescription.whyText | (. // "") | escape_html))
-                        else (v.ruleDescription.whyTextShort | (. // "") | escape_html)
-         end)
-      else "" end;
-    def how_to_fix_html(v; m):
-      if v.ruleDescription then
-        (if m == "full" then (v.ruleDescription.howToFixHtml // (v.ruleDescription.howToFixText | (. // "") | escape_html))
-                        else (v.ruleDescription.howToFixTextShort | (. // "") | escape_html)
-         end)
-      else "" end;
-    def code_block(v):
-      if v.codeSnippet then
-        (v.codeSnippet as $s |
-         "<div class=\"code-snippet\"><table class=\"code-table\">" +
-         ([$s.lines[]? |
-           "<tr class=\"" + (if .highlighted then "code-line code-line-hl" else "code-line" end) + "\">" +
-           "<td class=\"code-lineno\">" + (.n | tostring) + "</td>" +
-           "<td class=\"code-text\"><pre>" + ((.text // "") | escape_html) + "</pre></td></tr>"
-         ] | join("")) +
-         "</table></div>")
-      else "" end;
-    if (.hotspots | length) > 0 then
-      "<div class=\"table-shell hotspots-shell\"><table class=\"hotspots-table\"><thead><tr><th>#</th><th>Status</th><th>Risk</th><th>Component</th><th>Line</th></tr></thead>" +
-      ([.hotspots | to_entries[]? |
-        (.value.component // "") as $component |
-        (.value.ruleDescription.riskText // "") as $risk |
-        (why_html(.value; $mode)) as $why |
-        (how_to_fix_html(.value; $mode)) as $fix |
-        (code_block(.value)) as $code |
-        "<tbody class=\"hotspot-entry\"><tr class=\"hotspot-summary-row\"><td class=\"hotspot-index\">" + ((.key + 1) | tostring) + "</td>" +
-        "<td><span class=\"status-badge status-" + ((.value.status // "unknown") | ascii_downcase | gsub("_"; "-")) + "\">" + (.value.status // "?") + "</span>" +
-        (if (.value.status == "REVIEWED" and ((.value.resolution // "") != ""))
-         then " <span class=\"resolution-badge resolution-" + (.value.resolution | ascii_downcase) + "\">" + .value.resolution + "</span>"
-         else "" end) +
-        "</td>" +
-        "<td>" + ((.value.vulnerabilityProbability // "N/A") | escape_html) + "</td>" +
-        "<td class=\"hotspot-component\" title=\"" + ($component | escape_attr) + "\"><span class=\"hotspot-component-path\">" + ($component | component_path | escape_html) + "</span></td>" +
-        "<td>" + (line_display(.value) | escape_html) + "</td></tr>" +
-        "<tr class=\"hotspot-detail-row\"><td colspan=\"5\"><div class=\"hotspot-detail\"><div class=\"hotspot-detail-line\"><span class=\"hotspot-detail-label\">Rule</span><code>" + ((.value.rule // "") | escape_html) + "</code></div><div class=\"hotspot-detail-line hotspot-message-line\"><span class=\"hotspot-detail-label\">Message</span><span class=\"hotspot-detail-text\">" + ((.value.message // "") | escape_html) + "</span></div>" +
-        (if $risk != "" then "<div class=\"hotspot-section\"><div class=\"hotspot-section-title\">What'\''s the risk?</div><div class=\"hotspot-section-body\"><p>" + ($risk | escape_html) + "</p></div></div>" else "" end) +
-        (if $why != "" then "<div class=\"hotspot-section\"><div class=\"hotspot-section-title\">Why is this an issue?</div><div class=\"hotspot-section-body\">" + $why + "</div></div>" else "" end) +
-        (if $code != "" then "<div class=\"hotspot-section\"><div class=\"hotspot-section-title\">Affected code</div>" + $code + "</div>" else "" end) +
-        (if $fix != "" then "<div class=\"hotspot-section\"><div class=\"hotspot-section-title\">How to fix it</div><div class=\"hotspot-section-body\">" + $fix + "</div></div>" else "" end) +
-        "</div></td></tr></tbody>"
-      ] | join("")) +
-      "</table></div>"
-    else
-      "<p><em>No security hotspots found.</em></p>"
-    end
-  ')
+  hotspots_table=$(echo "$report_data" | jq -r --arg mode "$rule_mode" -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-hotspots-table.jq")
 
   # Issues details table
   local issues_table
-  issues_table=$(echo "$report_data" | jq -r --arg mode "$rule_mode" '
-    def escape_html:
-      gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
-    def escape_attr:
-      gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\""; "&quot;");
-    def component_path:
-      # Show the full path from the project root. The component key is
-      # "<projectKey>:<path>"; the path is the final colon-separated segment
-      # (project/module keys may themselves contain colons, but paths do not).
-      (. // "") as $component |
-      ($component | split(":") | last // "");
-    def line_display(v):
-      (v.startLine // v.line) as $s |
-      (v.endLine // v.line) as $e |
-      if ($s != null) and ($e != null) and (($e | tonumber? // 0) > ($s | tonumber? // 0))
-      then ($s | tostring) + "-" + ($e | tostring)
-      else ((v.line // v.startLine // "") | tostring) end;
-    def why_html(v; m):
-      if v.ruleDescription then
-        (if m == "full" then (v.ruleDescription.whyHtml // (v.ruleDescription.whyText | (. // "") | escape_html))
-                        else (v.ruleDescription.whyTextShort | (. // "") | escape_html)
-         end)
-      else "" end;
-    def how_to_fix_html(v; m):
-      if v.ruleDescription then
-        (if m == "full" then (v.ruleDescription.howToFixHtml // (v.ruleDescription.howToFixText | (. // "") | escape_html))
-                        else (v.ruleDescription.howToFixTextShort | (. // "") | escape_html)
-         end)
-      else "" end;
-    def code_block(v):
-      if v.codeSnippet then
-        (v.codeSnippet as $s |
-         "<div class=\"code-snippet\"><table class=\"code-table\">" +
-         ([$s.lines[]? |
-           "<tr class=\"" + (if .highlighted then "code-line code-line-hl" else "code-line" end) + "\">" +
-           "<td class=\"code-lineno\">" + (.n | tostring) + "</td>" +
-           "<td class=\"code-text\"><pre>" + ((.text // "") | escape_html) + "</pre></td></tr>"
-         ] | join("")) +
-         "</table></div>")
-      else "" end;
-    if (.issues | length) > 0 then
-      "<div class=\"table-shell issues-shell\"><table class=\"issues-table\"><thead><tr><th>#</th><th>Severity</th><th>Type</th><th>Component</th><th>Line</th><th>Effort</th></tr></thead>" +
-      ([.issues | to_entries[]? |
-        (.value.component // "") as $component |
-        (why_html(.value; $mode)) as $why |
-        (how_to_fix_html(.value; $mode)) as $fix |
-        (code_block(.value)) as $code |
-        "<tbody class=\"issue-entry\"><tr class=\"issue-summary-row\"><td class=\"issue-index\">" + ((.key + 1) | tostring) + "</td>" +
-        "<td><span class=\"sev sev-" + (.value.severity // "INFO") + "\">" + (.value.severity // "?") + "</span></td>" +
-        "<td><span class=\"type-badge\">" + (.value.type // "?") + "</span></td>" +
-        "<td class=\"issue-component\" title=\"" + ($component | escape_attr) + "\"><span class=\"issue-component-path\">" + ($component | component_path | escape_html) + "</span></td>" +
-        "<td>" + (line_display(.value) | escape_html) + "</td>" +
-        "<td>" + ((.value.effort // "N/A") | escape_html) + "</td></tr>" +
-        "<tr class=\"issue-detail-row\"><td colspan=\"6\"><div class=\"issue-detail\"><div class=\"issue-detail-line\"><span class=\"issue-detail-label\">Rule</span><code>" + ((.value.rule // "") | escape_html) + "</code></div><div class=\"issue-detail-line issue-message-line\"><span class=\"issue-detail-label\">Message</span><span class=\"issue-detail-text\">" + ((.value.message // "") | escape_html) + "</span></div>" +
-        (if $why != "" then "<div class=\"issue-section\"><div class=\"issue-section-title\">Why is this an issue?</div><div class=\"issue-section-body\">" + $why + "</div></div>" else "" end) +
-        (if $code != "" then "<div class=\"issue-section\"><div class=\"issue-section-title\">Affected code</div>" + $code + "</div>" else "" end) +
-        (if $fix != "" then "<div class=\"issue-section\"><div class=\"issue-section-title\">How to fix it</div><div class=\"issue-section-body\">" + $fix + "</div></div>" else "" end) +
-        "</div></td></tr></tbody>"
-      ] | join("")) +
-      "</table></div>"
-    else
-      "<p><em>No open issues found.</em></p>"
-    end
-  ')
+  issues_table=$(echo "$report_data" | jq -r --arg mode "$rule_mode" -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-issues-table.jq")
 
   # --- Build HTML by substituting placeholders ---
   local html
@@ -320,53 +174,21 @@ generate_html_report() {
 
   # Replace conditions table
   printf '%s' "$qg_conditions_table" > "${tmpfile}.rep"
-  awk -v ph="{{QG_CONDITIONS_TABLE}}" -v cf="${tmpfile}.rep" '
-    index($0, ph) {
-      n = index($0, ph)
-      prefix = substr($0, 1, n - 1)
-      suffix = substr($0, n + length(ph))
-      printf "%s", prefix
-      # Re-emit each line with its newline so significant whitespace inside
-      # <pre> blocks (e.g. rule-description code examples) is preserved.
-      while ((getline line < cf) > 0) printf "%s\n", line
-      close(cf)
-      printf "%s\n", suffix
-      next
-    }
-    { print }
-  ' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+  awk -v ph="{{QG_CONDITIONS_TABLE}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
 
   # Replace hotspots details table
   printf '%s' "$hotspots_table" > "${tmpfile}.rep"
-  awk -v ph="{{HOTSPOTS_TABLE}}" -v cf="${tmpfile}.rep" '
-    index($0, ph) {
-      n = index($0, ph)
-      prefix = substr($0, 1, n - 1)
-      suffix = substr($0, n + length(ph))
-      printf "%s", prefix
-      while ((getline line < cf) > 0) printf "%s\n", line
-      close(cf)
-      printf "%s\n", suffix
-      next
-    }
-    { print }
-  ' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+  awk -v ph="{{HOTSPOTS_TABLE}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
 
   # Replace issues details table
   printf '%s' "$issues_table" > "${tmpfile}.rep"
-  awk -v ph="{{ISSUES_TABLE}}" -v cf="${tmpfile}.rep" '
-    index($0, ph) {
-      n = index($0, ph)
-      prefix = substr($0, 1, n - 1)
-      suffix = substr($0, n + length(ph))
-      printf "%s", prefix
-      while ((getline line < cf) > 0) printf "%s\n", line
-      close(cf)
-      printf "%s\n", suffix
-      next
-    }
-    { print }
-  ' "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+  awk -v ph="{{ISSUES_TABLE}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
   rm -f "${tmpfile}.rep"
 
   # Write final output

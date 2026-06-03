@@ -54,7 +54,7 @@ jobs:
           kcov --version
 
       - name: Run coverage
-        run: bash tests/run_coverage.sh --min-coverage 90
+        run: bash tests/run_coverage.sh --min-coverage 92
 
       - name: Upload coverage artifact
         uses: actions/upload-artifact@v4

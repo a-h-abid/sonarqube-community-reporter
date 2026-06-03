@@ -42,8 +42,12 @@ generate_pdf_report() {
   mkdir -p "$output_dir"
 
   temp_html=$(mktemp "${TMPDIR:-/tmp}/sonar-report-pdf.XXXXXX.html")
-  trap 'rm -f "$temp_html"' RETURN
+  # Guard prevents the trap from failing under `set -u` when it fires in an
+  # outer caller's scope (where $temp_html is unset) — bash RETURN traps are
+  # shell-wide. Mirrors the pattern used in report-html.sh / notify.sh.
+  trap '[[ -n "${temp_html:-}" ]] && rm -f "$temp_html"' RETURN
 
+  # kcov-skip-start
   awk '
     /<\/head>/ && !inserted {
       print "  <style>"
@@ -54,6 +58,7 @@ generate_pdf_report() {
     }
     { print }
   ' "$html_file" > "$temp_html"
+  # kcov-skip-end
   render_html="$temp_html"
 
   wkhtmltopdf \

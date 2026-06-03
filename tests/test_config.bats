@@ -204,3 +204,79 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "" ]
 }
+
+# ==============================================================================
+# Additional branch coverage
+# ==============================================================================
+
+@test "is_allowed_key: accepts SONAR_URL (first allowlist entry)" {
+  run is_allowed_key SONAR_URL
+  [ "$status" -eq 0 ]
+}
+
+@test "sanitize_value: warns on shell metacharacters" {
+  run sanitize_value 'value$(whoami)'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Suspicious pattern detected"* ]]
+}
+
+@test "set_config_var: ignores unknown key with warning" {
+  run set_config_var "TOTALLY_UNKNOWN_KEY" "x"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Ignoring unknown config key"* ]]
+}
+
+@test "set_config_var: respects env snapshot (does not override)" {
+  _ENV_SNAPSHOT_VARS=" SONAR_URL "
+  export SONAR_URL="from-env"
+  set_config_var SONAR_URL "from-config"
+  [ "$SONAR_URL" = "from-env" ]
+}
+
+@test "parse_shell_config: strips quotes from values" {
+  local f; f=$(mktemp)
+  printf 'SONAR_TOKEN="quoted-token"\n' > "$f"
+  parse_shell_config "$f"
+  [ "$SONAR_TOKEN" = "quoted-token" ]
+  rm -f "$f"
+}
+
+@test "parse_yaml_config: strips quotes from values" {
+  local f; f=$(mktemp)
+  printf 'sonar:\n  token: "quoted-tok"\n' > "$f"
+  parse_yaml_config "$f"
+  [ "$SONAR_TOKEN" = "quoted-tok" ]
+  rm -f "$f"
+}
+
+@test "parse_yaml_config: warns on unknown YAML key" {
+  local f; f=$(mktemp)
+  printf 'sonar:\n  bogus_key: val\n' > "$f"
+  run parse_yaml_config "$f"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Ignoring unknown YAML key: sonar.bogus_key"* ]]
+  rm -f "$f"
+}
+
+@test "yaml_key_to_env_var: maps task_id, analysis_id, polling.wait, fail_on_gate" {
+  [ "$(yaml_key_to_env_var sonar task_id)" = "SONAR_TASK_ID" ]
+  [ "$(yaml_key_to_env_var sonar analysis_id)" = "ANALYSIS_ID" ]
+  [ "$(yaml_key_to_env_var polling wait)" = "WAIT_FOR_ANALYSIS" ]
+  [ "$(yaml_key_to_env_var options fail_on_gate)" = "FAIL_ON_GATE" ]
+}
+
+@test "load_config_file: errors when config_dir not specified" {
+  run load_config_file "" ""
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"config_dir not specified"* ]]
+}
+
+@test "load_config_file: auto-loads sonar-report.conf when no YAML present" {
+  local d; d=$(mktemp -d)
+  printf 'SONAR_BRANCH=confbranch\n' > "$d/sonar-report.conf"
+  run load_config_file "$d"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Loading config from"* ]]
+  [[ "$output" == *"sonar-report.conf"* ]]
+  rm -rf "$d"
+}

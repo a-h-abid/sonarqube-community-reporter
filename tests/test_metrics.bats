@@ -795,3 +795,53 @@ setup() {
   sonar_cloud=$(echo "$output" | jq -r '.metadata.sonarCloud')
   [ "$sonar_cloud" = "false" ]
 }
+
+# ==============================================================================
+# fetch_all_metrics — last-analysis-date and enrichment branches
+# ==============================================================================
+
+_mock_basic_fetchers() {
+  fetch_quality_gate()     { echo '{"status":"OK","conditions":[]}'; }
+  fetch_measures()         { echo '{"componentName":"P","measures":{}}'; }
+  fetch_issues_summary()   { echo '{"total":0,"byType":{},"bySeverity":{}}'; }
+  fetch_hotspots_summary() { echo '{"total":0,"toReview":0,"reviewed":0}'; }
+  fetch_all_issues()       { echo '[]'; }
+  fetch_all_hotspots()     { echo '[]'; }
+  export -f fetch_quality_gate fetch_measures fetch_issues_summary \
+            fetch_hotspots_summary fetch_all_issues fetch_all_hotspots
+}
+
+@test "fetch_all_metrics: warns when last analysis date is empty" {
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { echo ''; }
+  export -f fetch_last_analysis_date
+  export SONAR_CLOUD=false
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Last analysis date is unavailable"* ]]
+}
+
+@test "fetch_all_metrics: continues when last analysis date fetch fails" {
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { return 1; }
+  export -f fetch_last_analysis_date
+  export SONAR_CLOUD=false
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Failed to fetch last analysis date"* ]]
+}
+
+@test "fetch_all_metrics: builds enrichment metadata when code snippets enabled" {
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  enrich_issue_objects()   { echo "$1"; }
+  enrich_hotspot_objects() { echo "$1"; }
+  log_info() { :; }; log_ok() { :; }; log_warn() { :; }
+  export -f fetch_last_analysis_date enrich_issue_objects enrich_hotspot_objects \
+            log_info log_ok log_warn
+  export SONAR_CLOUD=false INCLUDE_CODE_SNIPPETS=true SNIPPET_CONTEXT=3
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  cs=$(echo "$output" | jq -r '.metadata.enrichment.codeSnippets')
+  [ "$cs" = "true" ]
+}

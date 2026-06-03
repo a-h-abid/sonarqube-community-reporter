@@ -65,11 +65,32 @@ Always run the tests for code changes, all of them must pass.
 bash tests/run_tests.sh
 ```
 
-Run Code Coverage, target minimum 90% coverage.
+Run Code Coverage, target minimum 92% coverage (aim for ~95%). CI enforces the 92% gate.
 
 ```bash
-bash tests/run_coverage.sh --min-coverage 90
+bash tests/run_coverage.sh --min-coverage 92
 ```
+
+### Coverage conventions
+
+- **Embedded `jq`/`awk`/`sed` programs and kcov:** kcov cannot mark individual
+  physical lines inside a multi-line single-quoted program (e.g.
+  `var=$(echo "$x" | jq '<newline>…multi-line…<newline>')`) as hit, even though
+  they execute. Two patterns keep coverage honest:
+  - **Large / reusable report-generator programs** live in external files under
+    `scripts/lib/jq/*.jq` and `scripts/lib/awk/*.awk`, loaded with `jq -f` /
+    `awk -f`. kcov does not instrument these, and they ship via the Dockerfile's
+    `COPY scripts/`.
+  - **Smaller embedded programs** (in `metrics.sh`, `rule-details.sh`,
+    `notify.sh`, `report-pdf.sh`) are wrapped in `# kcov-skip-start` …
+    `# kcov-skip-end` marker comments. `tests/run_coverage.sh` passes
+    `--exclude-region='kcov-skip-start:kcov-skip-end'` on **both** the per-file
+    `kcov` runs and the `kcov --merge` step (the flag is required on the merge
+    too, or the regions get re-included).
+- **`main()` and the entrypoint** are exercised end-to-end in
+  `tests/test_integration.bats` via `--dry-run` and mocked collaborators; the PDF
+  and spreadsheet tools are faked through a PATH sandbox so tests stay
+  deterministic and fast.
 
 ## Important Notes
 

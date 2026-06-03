@@ -265,3 +265,51 @@ setup() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"poll_called"* ]]
 }
+
+# ==============================================================================
+# Additional polling branch coverage
+# ==============================================================================
+
+@test "_poll_by_task_id: warns on unknown status then times out" {
+  sonar_api_get() { echo '{"task":{"status":"WEIRD"}}'; }
+  export -f sonar_api_get
+  export SONAR_TASK_ID="t1"
+  run _poll_by_task_id 1 0
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Unknown status: WEIRD"* ]]
+  [[ "$output" == *"Timed out"* ]]
+}
+
+@test "_poll_by_component: success with queued tasks then times out" {
+  sonar_api_get() { echo '{"current":{"status":"SUCCESS"},"queue":[{"id":"q1"}]}'; }
+  export -f sonar_api_get
+  run _poll_by_component 1 0
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"still queued"* ]]
+  [[ "$output" == *"Timed out"* ]]
+}
+
+@test "_poll_by_component: handles CANCELED status" {
+  sonar_api_get() { echo '{"current":{"status":"CANCELED"},"queue":[]}'; }
+  export -f sonar_api_get
+  run _poll_by_component 1 5
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"CANCELED"* ]]
+}
+
+@test "_poll_by_component: logs PENDING then loops to timeout" {
+  sonar_api_get() { echo '{"current":{"status":"PENDING"},"queue":[]}'; }
+  export -f sonar_api_get
+  run _poll_by_component 1 1
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Status: PENDING"* ]]
+}
+
+@test "_poll_by_component: NONE status with empty queue uses latest analysis" {
+  sonar_api_get() { echo '{"current":{"status":"NONE","analysisId":"A9"},"queue":[]}'; }
+  export -f sonar_api_get
+  run _poll_by_component 1 5
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"No active task"* ]]
+  [[ "$output" == *"No pending analysis"* ]]
+}

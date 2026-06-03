@@ -19,40 +19,8 @@ write_summary_csv() {
   local report_data_file="$1"
   local summary_csv="$2"
 
-  jq -r '
-    ["Metric","Value"],
-    ["Project Key", (.metadata.projectKey // "N/A")],
-    ["Project Name", (.metadata.projectName // .metadata.projectKey // "N/A")],
-    ["Branch", (.metadata.branch // "main")],
-    ["Report Date", (.metadata.reportDate // "N/A")],
-    ["Last Analysis Date", (.metadata.lastAnalysisDate // "N/A")],
-    ["Analysis ID", (.metadata.analysisId // "N/A")],
-    ["SonarQube URL", (.metadata.sonarUrl // "N/A")],
-    ["Quality Gate Status", (.qualityGate.status // "UNKNOWN")],
-    ["Bugs", (.measures.bugs // "0")],
-    ["Vulnerabilities", (.measures.vulnerabilities // "0")],
-    ["Code Smells", (.measures.code_smells // "0")],
-    ["Coverage (%)", (.measures.coverage // "N/A")],
-    ["Duplicated Lines Density (%)", (.measures.duplicated_lines_density // "N/A")],
-    ["Lines of Code", (.measures.ncloc // "0")],
-    ["Technical Debt (min)", (.measures.sqale_index // "0")],
-    ["Debt Ratio (%)", (.measures.sqale_debt_ratio // "N/A")],
-    ["Reliability Rating", (.measures.reliability_rating // "N/A")],
-    ["Security Rating", (.measures.security_rating // "N/A")],
-    ["Maintainability Rating", (.measures.sqale_rating // "N/A")],
-    ["Security Hotspots Reviewed (%)", (.measures.security_hotspots_reviewed // "N/A")],
-    ["Security Review Rating", (.measures.security_review_rating // "N/A")],
-    ["New Bugs", (.measures.new_bugs // "N/A")],
-    ["New Vulnerabilities", (.measures.new_vulnerabilities // "N/A")],
-    ["New Code Smells", (.measures.new_code_smells // "N/A")],
-    ["New Coverage (%)", (.measures.new_coverage // "N/A")],
-    ["New Duplicated Lines Density (%)", (.measures.new_duplicated_lines_density // "N/A")],
-    ["Total Issues", (.issuesSummary.total // 0 | tostring)],
-    ["Hotspots Total", (.hotspotsSummary.total // 0 | tostring)],
-    ["Hotspots To Review", (.hotspotsSummary.toReview // 0 | tostring)],
-    ["Hotspots Reviewed", (.hotspotsSummary.reviewed // 0 | tostring)]
-    | @csv
-  ' "$report_data_file" > "$summary_csv" || return 1
+  jq -r -f "${_REPORT_SPREADSHEET_SCRIPT_DIR}/jq/spreadsheet-summary.jq" \
+    "$report_data_file" > "$summary_csv" || return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -63,27 +31,8 @@ write_issues_csv() {
   local report_data_file="$1"
   local issues_csv="$2"
 
-  jq -r '
-    ["Key","Severity","Type","Rule","Component","Line","Message","Effort","Creation Date","End Line","Why"],
-    (
-      .issues // []
-      | .[]
-      | [
-          (.key // ""),
-          (.severity // ""),
-          (.type // ""),
-          (.rule // ""),
-          (.component // ""),
-          ((.line // "") | tostring),
-          (.message // ""),
-          (.effort // ""),
-          (.creationDate // ""),
-          ((.endLine // .line // "") | tostring),
-          (.ruleDescription.whyText // .ruleDescription.whyTextShort // "")
-        ]
-    )
-    | @csv
-  ' "$report_data_file" > "$issues_csv" || return 1
+  jq -r -f "${_REPORT_SPREADSHEET_SCRIPT_DIR}/jq/spreadsheet-issues.jq" \
+    "$report_data_file" > "$issues_csv" || return 1
 }
 
 # ---------------------------------------------------------------------------
@@ -94,30 +43,8 @@ write_hotspots_csv() {
   local report_data_file="$1"
   local hotspots_csv="$2"
 
-  jq -r '
-    ["Key","Status","Resolution","Risk","Rule","Component","Line","Message","Category","Author","Creation Date","Update Date","End Line","Risk Why"],
-    (
-      .hotspots // []
-      | .[]
-      | [
-          (.key // ""),
-          (.status // ""),
-          (.resolution // ""),
-          (.vulnerabilityProbability // ""),
-          (.rule // ""),
-          (.component // ""),
-          ((.line // "") | tostring),
-          (.message // ""),
-          (.securityCategory // ""),
-          (.author // ""),
-          (.creationDate // ""),
-          (.updateDate // ""),
-          ((.endLine // .line // "") | tostring),
-          (.ruleDescription.riskText // .ruleDescription.whyText // .ruleDescription.whyTextShort // "")
-        ]
-    )
-    | @csv
-  ' "$report_data_file" > "$hotspots_csv" || return 1
+  jq -r -f "${_REPORT_SPREADSHEET_SCRIPT_DIR}/jq/spreadsheet-hotspots.jq" \
+    "$report_data_file" > "$hotspots_csv" || return 1
 }
 
 # ---------------------------------------------------------------------------

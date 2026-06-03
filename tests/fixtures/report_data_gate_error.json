@@ -1,0 +1,50 @@
+{
+  "metadata": {
+    "projectKey": "failing-project",
+    "projectName": "Failing Project",
+    "branch": "develop",
+    "sonarUrl": "http://sonar.example.com",
+    "reportDate": "2024-01-15T10:00:00Z",
+    "lastAnalysisDate": "2024-01-14T09:30:00+0000",
+    "analysisId": "AXyz_analysis_999"
+  },
+  "qualityGate": {
+    "status": "ERROR",
+    "conditions": [
+      {
+        "metric": "new_coverage",
+        "status": "ERROR",
+        "actualValue": "42.0",
+        "errorThreshold": "80",
+        "comparator": "LT"
+      }
+    ]
+  },
+  "measures": {
+    "bugs": "9",
+    "vulnerabilities": "4",
+    "code_smells": "120",
+    "coverage": "42.0",
+    "duplicated_lines_density": "12.5",
+    "ncloc": "5000",
+    "sqale_index": "4800",
+    "sqale_debt_ratio": "18.0",
+    "reliability_rating": "5.0",
+    "security_rating": "4.0",
+    "sqale_rating": "3.0",
+    "security_hotspots_reviewed": "20",
+    "security_review_rating": "5.0"
+  },
+  "issuesSummary": {
+    "total": 133,
+    "byType": { "BUG": 9, "VULNERABILITY": 4, "CODE_SMELL": 120 },
+    "bySeverity": { "BLOCKER": 5, "CRITICAL": 18, "MAJOR": 40, "MINOR": 50, "INFO": 20 }
+  },
+  "hotspotsSummary": {
+    "total": 0,
+    "toReview": 0,
+    "reviewed": 0
+  },
+  "hotspots": [],
+  "issues": []
+}
