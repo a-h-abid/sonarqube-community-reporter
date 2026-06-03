@@ -31,7 +31,7 @@ jobs:
             scripts/lib/*.sh
 
   test:
-    name: bats test suite
+    name: bats test suite + coverage (kcov)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -42,5 +42,23 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y bats jq
 
-      - name: Run tests
-        run: bash tests/run_tests.sh
+      - name: Install kcov (prebuilt)
+        uses: taiki-e/install-action@v2
+        with:
+          tool: kcov
+
+      - name: Verify tool versions
+        run: |
+          bats --version
+          jq --version
+          kcov --version
+
+      - name: Run coverage
+        run: bash tests/run_coverage.sh --min-coverage 90
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: reports/coverage/
+          retention-days: 14

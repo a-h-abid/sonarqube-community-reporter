@@ -32,6 +32,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 | `wkhtmltopdf` | Any | PDF generation (optional) |
 | `gnumeric` (`ssconvert`) | Any | XLSX/ODS generation (optional) |
 | `bats` | 1.x | Running the test suite (optional) |
+| `kcov` | Any | Bash line coverage measurement (optional) |
 
 ---
 
@@ -491,11 +492,38 @@ sudo apt-get install -y bats jq
 brew install bats-core jq
 ```
 
+For coverage measurement, install `kcov`:
+
+Official install instructions: https://github.com/SimonKagstrom/kcov/blob/master/INSTALL.md
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install -y kcov
+
+# macOS
+brew install kcov
+```
+
 ### Running the Tests
 
 ```bash
 bash tests/run_tests.sh
 ```
+
+### Running Coverage
+
+```bash
+# Generate kcov HTML + Cobertura XML reports under reports/coverage
+bash tests/run_coverage.sh
+
+# Optional: fail if line coverage is below a threshold
+bash tests/run_coverage.sh --min-coverage 90
+```
+
+Coverage outputs:
+
+- `reports/coverage/index.html` — browsable HTML report
+- `reports/coverage/cobertura.xml` — machine-readable coverage report
 
 ### Test Coverage
 
@@ -511,6 +539,7 @@ bash tests/run_tests.sh
 Test fixtures (JSON files representing every SonarQube API response shape) live in `tests/fixtures/`.
 
 The test suite also runs automatically in CI via the **Lint and Test** GitHub Actions workflow (`.github/workflows/test.yml`) on every push and pull request.
+The same workflow also runs `kcov` coverage and uploads `reports/coverage/` as a workflow artifact (`coverage-report`).
 
 ---
 
@@ -572,6 +601,7 @@ All open issues sorted by severity, with file path, line number, rule, message, 
 │   └── report.html.tpl               # Styled HTML template
 ├── tests/
 │   ├── run_tests.sh                  # Single-command test runner
+│   ├── run_coverage.sh               # kcov coverage runner for bats tests
 │   ├── helpers.bash                  # Shared bats helpers (counter mocks)
 │   ├── test_api.bats                 # Tests for scripts/lib/api.sh
 │   ├── test_metrics.bats             # Tests for scripts/lib/metrics.sh

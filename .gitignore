@@ -1,6 +1,9 @@
 # Reports output
 reports/
 
+# Coverage output
+coverage/
+
 # Environment
 .env
 
