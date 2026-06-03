@@ -510,7 +510,7 @@ teardown() {
   grep -q "Unsanitized SQL query" "$filepath"
 }
 
-@test "generate_html_report: shortens visible component paths in hotspots" {
+@test "generate_html_report: shows full component path from project root in hotspots" {
   local tmp_hotspot_component
   tmp_hotspot_component=$(mktemp)
   echo "$_REPORT_DATA" | jq '
@@ -519,7 +519,7 @@ teardown() {
         "key": "HS3", "status": "TO_REVIEW",
         "vulnerabilityProbability": "MEDIUM",
         "securityCategory": "xss",
-        "message": "Long path should be shortened in the hotspot summary row",
+        "message": "Full path should be shown in the hotspot summary row",
         "component": "my-project:src/main/java/com/example/deep/repository/DbAccess.java",
         "line": 19,
         "rule": "java:S5131",
@@ -534,7 +534,9 @@ teardown() {
   [ "$status" -eq 0 ]
   local filepath="${lines[-1]}"
   grep -q 'title="my-project:src/main/java/com/example/deep/repository/DbAccess.java"' "$filepath"
-  grep -q '\.\.\./deep/repository/DbAccess.java' "$filepath"
+  # Full path from the project root is shown, with no "..." truncation
+  grep -q '<span class="hotspot-component-path">src/main/java/com/example/deep/repository/DbAccess.java</span>' "$filepath"
+  ! grep -q '\.\.\./deep/repository/DbAccess.java' "$filepath"
 }
 
 @test "generate_html_report: issues details use summary and detail rows" {
@@ -662,14 +664,14 @@ teardown() {
   grep -q "An attacker could read secrets" "$filepath"
 }
 
-@test "generate_html_report: shortens visible component paths in issues" {
+@test "generate_html_report: shows full component path from project root in issues" {
   local tmp_component
   tmp_component=$(mktemp)
   echo "$_REPORT_DATA" | jq '
     .issues = [
       {
         "key": "AX2", "severity": "MAJOR", "type": "CODE_SMELL",
-        "message": "Long path should be shortened in the summary row",
+        "message": "Full path should be shown in the summary row",
         "component": "my-project:src/main/java/com/example/deep/service/MainService.java",
         "line": 64,
         "rule": "java:S1192", "effort": "8min",
@@ -682,7 +684,9 @@ teardown() {
   [ "$status" -eq 0 ]
   local filepath="${lines[-1]}"
   grep -q 'title="my-project:src/main/java/com/example/deep/service/MainService.java"' "$filepath"
-  grep -q '\.\.\./deep/service/MainService.java' "$filepath"
+  # Full path from the project root is shown, with no "..." truncation
+  grep -q '<span class="issue-component-path">src/main/java/com/example/deep/service/MainService.java</span>' "$filepath"
+  ! grep -q '\.\.\./deep/service/MainService.java' "$filepath"
 }
 
 @test "generate_html_report: uses PDF-safe card layout wrappers" {

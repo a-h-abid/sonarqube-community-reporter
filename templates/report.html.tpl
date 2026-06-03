@@ -141,7 +141,8 @@
     tr:nth-child(even) { background: #f8f9fa; }
 
     .issues-table {
-      min-width: 100%;
+      width: 100%;
+      table-layout: fixed;
       font-size: 0.9rem;
     }
     .issues-table th,
@@ -162,13 +163,21 @@
       page-break-inside: avoid;
     }
     .issue-summary-row td {
-      background: #fff;
+      background: #2f3640;
+      color: #fff;
       border-bottom: none;
       font-weight: 600;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
+    .issue-summary-row a,
+    .issue-summary-row code,
+    .issue-summary-row .issue-component-path { color: #fff; }
     .issue-detail-row td {
       padding-top: 0;
-      background: #fcfcfd;
+      background: #fbfbfc;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .issue-detail {
       border-top: 1px solid var(--color-border);
@@ -201,7 +210,8 @@
     }
 
     .hotspots-table {
-      min-width: 100%;
+      width: 100%;
+      table-layout: fixed;
       font-size: 0.9rem;
     }
     .hotspots-table th,
@@ -221,13 +231,21 @@
       page-break-inside: avoid;
     }
     .hotspot-summary-row td {
-      background: #fff;
+      background: #2f3640;
+      color: #fff;
       border-bottom: none;
       font-weight: 600;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
+    .hotspot-summary-row a,
+    .hotspot-summary-row code,
+    .hotspot-summary-row .hotspot-component-path { color: #fff; }
     .hotspot-detail-row td {
       padding-top: 0;
-      background: #fcfcfd;
+      background: #fbfbfc;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
     }
     .hotspot-detail {
       border-top: 1px solid var(--color-border);
@@ -298,10 +316,12 @@
     .hotspot-section-body code { padding: 1px 4px; }
     .issue-section-body pre,
     .hotspot-section-body pre {
+      display: block;
       padding: 8px 10px;
       margin: 6px 0;
-      overflow-x: auto;
-      white-space: pre;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
     }
     .issue-section-body ul,
     .hotspot-section-body ul,
@@ -318,6 +338,7 @@
     }
     .code-table {
       width: 100%;
+      table-layout: fixed;
       border-collapse: collapse;
       font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
       font-size: 0.82rem;
@@ -346,10 +367,11 @@
       margin: 0;
       padding: 0;
       background: transparent;
-      white-space: pre;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      word-break: break-word;
       font-family: inherit;
       font-size: inherit;
-      overflow-x: hidden;
     }
     .code-line-hl .code-lineno {
       background: #fff5f5;

@@ -130,10 +130,11 @@ generate_html_report() {
     def escape_attr:
       gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\""; "&quot;");
     def component_path:
+      # Show the full path from the project root. The component key is
+      # "<projectKey>:<path>"; the path is the final colon-separated segment
+      # (project/module keys may themselves contain colons, but paths do not).
       (. // "") as $component |
-      ($component | split(":") | last // "") as $path |
-      ($path | split("/")) as $parts |
-      if ($parts | length) > 3 then ".../" + ($parts[-3:] | join("/")) else $path end;
+      ($component | split(":") | last // "");
     def line_display(v):
       (v.startLine // v.line) as $s |
       (v.endLine // v.line) as $e |
@@ -201,10 +202,11 @@ generate_html_report() {
     def escape_attr:
       gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\""; "&quot;");
     def component_path:
+      # Show the full path from the project root. The component key is
+      # "<projectKey>:<path>"; the path is the final colon-separated segment
+      # (project/module keys may themselves contain colons, but paths do not).
       (. // "") as $component |
-      ($component | split(":") | last // "") as $path |
-      ($path | split("/")) as $parts |
-      if ($parts | length) > 3 then ".../" + ($parts[-3:] | join("/")) else $path end;
+      ($component | split(":") | last // "");
     def line_display(v):
       (v.startLine // v.line) as $s |
       (v.endLine // v.line) as $e |
@@ -324,7 +326,9 @@ generate_html_report() {
       prefix = substr($0, 1, n - 1)
       suffix = substr($0, n + length(ph))
       printf "%s", prefix
-      while ((getline line < cf) > 0) printf "%s", line
+      # Re-emit each line with its newline so significant whitespace inside
+      # <pre> blocks (e.g. rule-description code examples) is preserved.
+      while ((getline line < cf) > 0) printf "%s\n", line
       close(cf)
       printf "%s\n", suffix
       next
@@ -340,7 +344,7 @@ generate_html_report() {
       prefix = substr($0, 1, n - 1)
       suffix = substr($0, n + length(ph))
       printf "%s", prefix
-      while ((getline line < cf) > 0) printf "%s", line
+      while ((getline line < cf) > 0) printf "%s\n", line
       close(cf)
       printf "%s\n", suffix
       next
@@ -356,7 +360,7 @@ generate_html_report() {
       prefix = substr($0, 1, n - 1)
       suffix = substr($0, n + length(ph))
       printf "%s", prefix
-      while ((getline line < cf) > 0) printf "%s", line
+      while ((getline line < cf) > 0) printf "%s\n", line
       close(cf)
       printf "%s\n", suffix
       next
