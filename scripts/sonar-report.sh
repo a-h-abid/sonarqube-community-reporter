@@ -39,7 +39,15 @@
 #                                                       (env: INCLUDE_CODE_SNIPPETS)
 #   --snippet-context N    Lines of context around the affected lines (default: 3)
 #                                                       (env: SNIPPET_CONTEXT)
+#   --config FILE          Load configuration from FILE (default: auto-detect
+#                          .sonar-report.yml or sonar-report.conf)
 #   -h, --help             Show this help
+#
+# Configuration precedence (highest to lowest):
+#   1. CLI flags (--url, --token, etc.)
+#   2. Environment variables (SONAR_URL, SONAR_TOKEN, etc.)
+#   3. Config file (.sonar-report.yml or sonar-report.conf)
+#   4. Built-in defaults
 # HELP_END
 # ==============================================================================
 set -euo pipefail
@@ -56,6 +64,8 @@ fi
 # Source library modules
 # shellcheck source=lib/api.sh
 source "${_MAIN_SCRIPT_DIR}/lib/api.sh"
+# shellcheck source=lib/config.sh
+source "${_MAIN_SCRIPT_DIR}/lib/config.sh"
 # shellcheck source=lib/metrics.sh
 source "${_MAIN_SCRIPT_DIR}/lib/metrics.sh"
 # shellcheck source=lib/report-json.sh
@@ -78,29 +88,49 @@ source "${_MAIN_SCRIPT_DIR}/lib/notify.sh"
 source "${_MAIN_SCRIPT_DIR}/wait-for-analysis.sh"
 
 # ===========================================================================
-# Defaults (can be overridden by env vars or CLI args)
+# Snapshot environment variables set before defaults/config
+# (These take precedence over config file values and defaults)
 # ===========================================================================
-SONAR_URL="${SONAR_URL:-http://localhost:9000}"
-SONAR_TOKEN="${SONAR_TOKEN:-}"
-SONAR_PROJECT_KEY="${SONAR_PROJECT_KEY:-}"
-SONAR_BRANCH="${SONAR_BRANCH:-}"
-SONAR_TASK_ID="${SONAR_TASK_ID:-}"
-SONAR_ORGANIZATION="${SONAR_ORGANIZATION:-}"
-SONAR_CLOUD="${SONAR_CLOUD:-false}"
-REPORT_FORMATS="${REPORT_FORMATS:-json,md,html,pdf,xlsx,ods}"
-REPORT_OUTPUT_DIR="${REPORT_OUTPUT_DIR:-./reports}"
-POLL_INTERVAL="${POLL_INTERVAL:-5}"
-POLL_TIMEOUT="${POLL_TIMEOUT:-300}"
-ANALYSIS_ID="${ANALYSIS_ID:-}"
-DRY_RUN_FILE="${DRY_RUN_FILE:-}"
-NOTIFY_WEBHOOK="${NOTIFY_WEBHOOK:-}"
-INCLUDE_RULE_DESCRIPTIONS="${INCLUDE_RULE_DESCRIPTIONS:-}"
-INCLUDE_CODE_SNIPPETS="${INCLUDE_CODE_SNIPPETS:-false}"
-SNIPPET_CONTEXT="${SNIPPET_CONTEXT:-3}"
+_ENV_SNAPSHOT_VARS=""
+for _var in SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_TASK_ID \
+            SONAR_ORGANIZATION SONAR_CLOUD REPORT_FORMATS REPORT_OUTPUT_DIR \
+            POLL_INTERVAL POLL_TIMEOUT ANALYSIS_ID DRY_RUN_FILE NOTIFY_WEBHOOK \
+            INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT \
+            WAIT_FOR_ANALYSIS FAIL_ON_GATE; do
+  if [[ -n "${!_var:-}" ]]; then
+    _ENV_SNAPSHOT_VARS="${_ENV_SNAPSHOT_VARS} ${_var}"
+  fi
+done
 
-WAIT_FOR_ANALYSIS=false
-FAIL_ON_GATE=false
+WAIT_FOR_ANALYSIS="${WAIT_FOR_ANALYSIS:-false}"
+FAIL_ON_GATE="${FAIL_ON_GATE:-false}"
 REQUESTED_FORMATS=()
+
+# ---------------------------------------------------------------------------
+# apply_defaults — Sets default values for any variable not already configured
+#   Called after config file loading to ensure precedence: env > config > defaults
+# ---------------------------------------------------------------------------
+apply_defaults() {
+  [[ -z "${SONAR_URL:-}" ]]                 && SONAR_URL="http://localhost:9000"
+  [[ -z "${SONAR_TOKEN:-}" ]]               && SONAR_TOKEN=""
+  [[ -z "${SONAR_PROJECT_KEY:-}" ]]         && SONAR_PROJECT_KEY=""
+  [[ -z "${SONAR_BRANCH:-}" ]]              && SONAR_BRANCH=""
+  [[ -z "${SONAR_TASK_ID:-}" ]]             && SONAR_TASK_ID=""
+  [[ -z "${SONAR_ORGANIZATION:-}" ]]        && SONAR_ORGANIZATION=""
+  [[ -z "${SONAR_CLOUD:-}" ]]               && SONAR_CLOUD="false"
+  [[ -z "${REPORT_FORMATS:-}" ]]            && REPORT_FORMATS="json,md,html,pdf,xlsx,ods"
+  [[ -z "${REPORT_OUTPUT_DIR:-}" ]]         && REPORT_OUTPUT_DIR="./reports"
+  [[ -z "${POLL_INTERVAL:-}" ]]             && POLL_INTERVAL="5"
+  [[ -z "${POLL_TIMEOUT:-}" ]]              && POLL_TIMEOUT="300"
+  [[ -z "${ANALYSIS_ID:-}" ]]               && ANALYSIS_ID=""
+  [[ -z "${DRY_RUN_FILE:-}" ]]              && DRY_RUN_FILE=""
+  [[ -z "${NOTIFY_WEBHOOK:-}" ]]            && NOTIFY_WEBHOOK=""
+  [[ -z "${INCLUDE_RULE_DESCRIPTIONS:-}" ]] && INCLUDE_RULE_DESCRIPTIONS=""
+  [[ -z "${INCLUDE_CODE_SNIPPETS:-}" ]]     && INCLUDE_CODE_SNIPPETS="false"
+  [[ -z "${SNIPPET_CONTEXT:-}" ]]           && SNIPPET_CONTEXT="3"
+  [[ -z "${WAIT_FOR_ANALYSIS:-}" ]]         && WAIT_FOR_ANALYSIS="false"
+  [[ -z "${FAIL_ON_GATE:-}" ]]              && FAIL_ON_GATE="false"
+}
 
 # ===========================================================================
 # CLI Argument Parsing
@@ -129,6 +159,7 @@ parse_args() {
       --fail-on-gate)    FAIL_ON_GATE=true;       shift   ;;
       --dry-run)         DRY_RUN_FILE="$2";       shift 2 ;;
       --notify-webhook)  NOTIFY_WEBHOOK="$2";     shift 2 ;;
+      --config)          shift 2 ;;  # Handled in main() before parse_args
       --include-rule-descriptions)
         INCLUDE_RULE_DESCRIPTIONS="short"; shift ;;
       --include-rule-descriptions=*)
@@ -313,6 +344,33 @@ validate_params() {
 # Main
 # ===========================================================================
 main() {
+  # First pass: look for --config flag only (to load config early)
+  local explicit_config=""
+  for arg in "$@"; do
+    if [[ "$arg" == "--config" ]]; then
+      # Next arg after --config is the file path
+      local next_is_config=true
+      continue
+    fi
+    if [[ "${next_is_config:-false}" == "true" ]]; then
+      explicit_config="$arg"
+      break
+    fi
+  done
+
+  # Load config file (auto-detect or explicit)
+  # This happens after .env but before parse_args, so precedence is:
+  #   CLI args > env vars > config file > defaults
+  if [[ -n "$explicit_config" ]]; then
+    load_config_file "" "$explicit_config"
+  else
+    load_config_file "${_MAIN_SCRIPT_DIR}/.."
+  fi
+
+  # Apply defaults for any variables not set by env or config
+  apply_defaults
+
+  # Second pass: parse all arguments
   parse_args "$@"
 
   echo ""

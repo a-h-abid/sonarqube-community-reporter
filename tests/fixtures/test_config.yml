@@ -1,0 +1,25 @@
+# Test fixture for YAML config
+sonar:
+  url: http://yaml-test.example.com:9000
+  token: yaml_token_67890
+  project_key: yaml-test-project
+  branch: main
+  organization: test-org
+  cloud: false
+
+report:
+  formats: html,pdf
+  output_dir: /tmp/yaml-reports
+
+polling:
+  interval: 15
+  timeout: 900
+
+enrichment:
+  include_rule_descriptions: full
+  include_code_snippets: true
+  snippet_context: 7
+
+options:
+  dry_run_file: /tmp/dry-run.json
+  notify_webhook: https://hooks.example.com/webhook

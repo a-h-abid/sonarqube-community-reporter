@@ -137,6 +137,74 @@ All CLI options can be set via environment variables. Create a `.env` file from 
 cp .env.example .env
 ```
 
+### Configuration Files
+
+As an alternative to environment variables and CLI flags, you can use configuration files to manage your settings. The tool supports two formats:
+
+#### Shell-style config: `sonar-report.conf`
+
+```bash
+# Copy and edit the example
+cp sonar-report.conf.example sonar-report.conf
+
+# Example content:
+SONAR_URL=http://localhost:9000
+SONAR_TOKEN=your_token_here
+SONAR_PROJECT_KEY=my-project
+REPORT_FORMATS=json,md,html,pdf
+```
+
+#### YAML config: `.sonar-report.yml`
+
+```yaml
+# Copy and edit the example
+cp .sonar-report.yml.example .sonar-report.yml
+
+# Example content:
+sonar:
+  url: http://localhost:9000
+  token: your_token_here
+  project_key: my-project
+
+report:
+  formats: json,md,html,pdf
+  output_dir: ./reports
+```
+
+#### Configuration Precedence
+
+Settings are applied in the following order (highest to lowest priority):
+
+1. **CLI flags** — `--url`, `--token`, etc.
+2. **Environment variables** — `SONAR_URL`, `SONAR_TOKEN`, etc.
+3. **Config file** — `sonar-report.conf` or `.sonar-report.yml`
+4. **Built-in defaults**
+
+#### Auto-detection
+
+The tool automatically searches for config files in the project root:
+
+- Prefers `.sonar-report.yml` if it exists
+- Falls back to `sonar-report.conf` if YAML not found
+- No error if neither file exists
+
+To use a config file at a custom location:
+
+```bash
+./scripts/sonar-report.sh --config /path/to/my-config.yml
+```
+
+#### Docker Usage
+
+Mount your config file into the container:
+
+```bash
+docker run --rm \
+  -v $(pwd)/.sonar-report.yml:/app/.sonar-report.yml \
+  -v $(pwd)/reports:/reports \
+  sonar-report-tool
+```
+
 ### SonarCloud Support
 
 The tool works with **SonarCloud** in addition to self-hosted SonarQube Community Edition.
