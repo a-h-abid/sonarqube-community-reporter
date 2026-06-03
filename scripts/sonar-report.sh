@@ -130,6 +130,8 @@ apply_defaults() {
   [[ -z "${SNIPPET_CONTEXT:-}" ]]           && SNIPPET_CONTEXT="3"
   [[ -z "${WAIT_FOR_ANALYSIS:-}" ]]         && WAIT_FOR_ANALYSIS="false"
   [[ -z "${FAIL_ON_GATE:-}" ]]              && FAIL_ON_GATE="false"
+
+  return 0
 }
 
 # ===========================================================================

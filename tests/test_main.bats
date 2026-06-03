@@ -36,6 +36,25 @@ setup() {
   [ "$output" = "md" ]
 }
 
+@test "apply_defaults: returns success when values are already set" {
+  SONAR_URL="http://example.com"
+  SONAR_TOKEN="mytoken"
+  SONAR_PROJECT_KEY="myproject"
+  SONAR_CLOUD="false"
+  REPORT_FORMATS="json,md"
+  REPORT_OUTPUT_DIR="./reports"
+  POLL_INTERVAL="5"
+  POLL_TIMEOUT="300"
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  WAIT_FOR_ANALYSIS="false"
+  FAIL_ON_GATE="false"
+
+  run apply_defaults
+
+  [ "$status" -eq 0 ]
+}
+
 @test "validate_report_formats: rejects unsupported formats" {
   REPORT_FORMATS="json,invalid"
 
