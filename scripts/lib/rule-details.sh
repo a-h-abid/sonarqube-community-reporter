@@ -35,6 +35,19 @@ _validate_json_response() {
   fi
 }
 
+_validate_enrichment_payload() {
+  local payload_kind="$1"
+  local payload="$2"
+  local target_kind="$3"
+  local target_key="$4"
+
+  if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$payload"; then
+    log_error "Invalid ${payload_kind} payload while enriching ${target_kind} ${target_key}"
+    log_error "Payload: ${payload}"
+    return 1
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # _normalize_rule_html  (stdin -> stdout)
 #   SonarQube's rule HTML is trusted documentation. We defensively strip
@@ -405,7 +418,8 @@ enrich_issue_objects() {
   # shellcheck disable=SC2064
   trap "rm -f '$tmp_out'" RETURN
 
-  local issue issue_key rule_key component start_line end_line rule_obj snippet_obj
+  local issue issue_key rule_key component
+  local start_line end_line rule_obj snippet_obj
   while IFS= read -r issue; do
     issue_key=$(echo "$issue" | jq -r '.key // ""')
     rule_key=$(echo "$issue" | jq -r '.rule // ""')
@@ -429,14 +443,10 @@ enrich_issue_objects() {
       fi
     fi
 
-    if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$rule_obj"; then
-      log_error "Invalid rule details payload while enriching issue ${issue_key:-<unknown>}"
-      log_error "Payload: ${rule_obj}"
+    if ! _validate_enrichment_payload "rule details" "$rule_obj" "issue" "${issue_key:-<unknown>}"; then
       return 1
     fi
-    if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$snippet_obj"; then
-      log_error "Invalid source snippet payload while enriching issue ${issue_key:-<unknown>}"
-      log_error "Payload: ${snippet_obj}"
+    if ! _validate_enrichment_payload "source snippet" "$snippet_obj" "issue" "${issue_key:-<unknown>}"; then
       return 1
     fi
 
@@ -505,14 +515,10 @@ enrich_hotspot_objects() {
       fi
     fi
 
-    if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$rule_obj"; then
-      log_error "Invalid hotspot rule details payload while enriching hotspot ${hs_key}"
-      log_error "Payload: ${rule_obj}"
+    if ! _validate_enrichment_payload "hotspot rule details" "$rule_obj" "hotspot" "${hs_key}"; then
       return 1
     fi
-    if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$snippet_obj"; then
-      log_error "Invalid source snippet payload while enriching hotspot ${hs_key}"
-      log_error "Payload: ${snippet_obj}"
+    if ! _validate_enrichment_payload "source snippet" "$snippet_obj" "hotspot" "${hs_key}"; then
       return 1
     fi
 
