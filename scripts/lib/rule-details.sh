@@ -359,22 +359,28 @@ fetch_source_snippet() {
   local snip_end=$((end_line + context))
 
   # kcov-skip-start
-  printf '%s' "$raw" | awk -v s="$snip_start" -v e="$snip_end" \
-                           -v hs="$start_line" -v he="$end_line" '
-    BEGIN { printf "{\"startLine\":%d,\"endLine\":%d,\"lines\":[", s, e; sep="" }
-    {
-      if (NR < s) next
-      if (NR > e) { exit }
-      line = $0
-      gsub(/\\/, "\\\\", line)
-      gsub(/"/,  "\\\"", line)
-      gsub(/\t/, "\\t", line)
-      gsub(/\r/, "", line)
-      hl = (NR >= hs && NR <= he) ? "true" : "false"
-      printf "%s{\"n\":%d,\"text\":\"%s\",\"highlighted\":%s}", sep, NR, line, hl
-      sep = ","
-    }
-    END { printf "]}\n" }
+  printf '%s' "$raw" | jq -Rs \
+    --argjson s "$snip_start" \
+    --argjson e "$snip_end" \
+    --argjson hs "$start_line" \
+    --argjson he "$end_line" '
+    # Split into lines; treat empty input as an empty file
+    (if . == "" then [] else (sub("\n$"; "") | split("\n")) end) as $lines
+    | ([$s - 1, 0] | max) as $lo
+    | ([$e - 1, ($lines | length) - 1] | min) as $hi
+    | {
+        startLine: $s,
+        endLine: $e,
+        lines: [
+          range($lo; $hi + 1) as $i
+          | ($i + 1) as $n
+          | {
+              n: $n,
+              text: ($lines[$i] | gsub("\r"; "")),
+              highlighted: ($n >= $hs and $n <= $he)
+            }
+        ]
+      }
   '
   # kcov-skip-end
 }
