@@ -40,12 +40,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y bats jq
-
-      - name: Install kcov (prebuilt)
-        uses: taiki-e/install-action@v2
-        with:
-          tool: kcov
+          sudo apt-get install -y bats jq kcov
 
       - name: Verify tool versions
         run: |
