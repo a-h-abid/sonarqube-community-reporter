@@ -266,13 +266,17 @@ fetch_all_metrics() {
 
   if [[ -n "${INCLUDE_RULE_DESCRIPTIONS:-}" ]] || [[ "${INCLUDE_CODE_SNIPPETS:-false}" == "true" ]]; then
     log_info "Enriching issue details ..."
-    all_issues=$(enrich_issue_objects "$all_issues") || \
-      log_warn "Issue enrichment partially failed — continuing"
+    all_issues=$(enrich_issue_objects "$all_issues") || {
+      log_error "Failed to enrich issue details"
+      return 1
+    }
     log_ok "Issues enriched"
 
     log_info "Enriching hotspot details ..."
-    all_hotspots=$(enrich_hotspot_objects "$all_hotspots") || \
-      log_warn "Hotspot enrichment partially failed — continuing"
+    all_hotspots=$(enrich_hotspot_objects "$all_hotspots") || {
+      log_error "Failed to enrich hotspot details"
+      return 1
+    }
     log_ok "Hotspots enriched"
   fi
 

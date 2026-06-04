@@ -24,6 +24,17 @@ declare -gA _COMPONENT_NEGATIVE=()
 
 _SOURCE_CACHE_MAX_BYTES="${_SOURCE_CACHE_MAX_BYTES:-5242880}"  # 5 MB
 
+_validate_json_response() {
+  local endpoint="$1"
+  local response="$2"
+
+  if ! jq -e . >/dev/null 2>&1 <<< "$response"; then
+    log_error "Invalid JSON response from ${endpoint}"
+    log_error "Response: ${response}"
+    return 1
+  fi
+}
+
 # ---------------------------------------------------------------------------
 # _normalize_rule_html  (stdin -> stdout)
 #   SonarQube's rule HTML is trusted documentation. We defensively strip
@@ -178,19 +189,23 @@ fetch_rule_details() {
     return 0
   fi
   if [[ -n "${_RULE_NEGATIVE[$rule_key]:-}" ]]; then
-    echo "{}"
-    return 0
+    return 1
   fi
 
   local key_enc
   key_enc=$(printf '%s' "$rule_key" | jq -sRr @uri)
 
   local response
-  if ! response=$(sonar_api_get "rules/show?key=${key_enc}" 2>/dev/null); then
-    log_warn "Rule details unavailable for ${rule_key} (skipping)"
+  if ! response=$(sonar_api_get "rules/show?key=${key_enc}"); then
+    log_error "Failed to fetch rule details for ${rule_key}"
     _RULE_NEGATIVE[$rule_key]=1
-    echo "{}"
-    return 0
+    return 1
+  fi
+
+  if ! _validate_json_response "rules/show?key=${key_enc}" "$response"; then
+    log_error "Failed to parse rule details for ${rule_key}"
+    _RULE_NEGATIVE[$rule_key]=1
+    return 1
   fi
 
   local why_raw fix_raw
@@ -254,10 +269,14 @@ fetch_hotspot_details() {
   hs_enc=$(printf '%s' "$hotspot_key" | jq -sRr @uri)
 
   local response
-  if ! response=$(sonar_api_get "hotspots/show?hotspot=${hs_enc}" 2>/dev/null); then
-    log_warn "Hotspot details unavailable for ${hotspot_key} (skipping)"
-    echo "{}"
-    return 0
+  if ! response=$(sonar_api_get "hotspots/show?hotspot=${hs_enc}"); then
+    log_error "Failed to fetch hotspot details for ${hotspot_key}"
+    return 1
+  fi
+
+  if ! _validate_json_response "hotspots/show?hotspot=${hs_enc}" "$response"; then
+    log_error "Failed to parse hotspot details for ${hotspot_key}"
+    return 1
   fi
 
   local risk_raw why_raw fix_raw
@@ -312,11 +331,10 @@ fetch_source_snippet() {
   else
     local comp_enc
     comp_enc=$(printf '%s' "$component_key" | jq -sRr @uri)
-    if ! raw=$(sonar_api_get "sources/raw?key=${comp_enc}" 2>/dev/null); then
-      log_warn "Source unavailable for ${component_key} (skipping snippet)"
+    if ! raw=$(sonar_api_get "sources/raw?key=${comp_enc}"); then
+      log_error "Failed to fetch source snippet for ${component_key}"
       _COMPONENT_NEGATIVE[$component_key]=1
-      echo "{}"
-      return 0
+      return 1
     fi
     if [[ "${#raw}" -le "$_SOURCE_CACHE_MAX_BYTES" ]]; then
       _SOURCE_CACHE[$component_key]="$raw"
@@ -373,7 +391,12 @@ enrich_issue_objects() {
   if [[ -n "$rule_mode" ]]; then
     local rk
     while IFS= read -r rk; do
-      [[ -n "$rk" && "$rk" != "null" ]] && fetch_rule_details "$rk" >/dev/null
+      if [[ -n "$rk" && "$rk" != "null" ]]; then
+        if ! fetch_rule_details "$rk" >/dev/null; then
+          log_error "Failed to prefetch rule details for ${rk}"
+          return 1
+        fi
+      fi
     done < <(echo "$issues_json" | jq -r '[.[].rule] | unique[]?')
   fi
 
@@ -382,8 +405,9 @@ enrich_issue_objects() {
   # shellcheck disable=SC2064
   trap "rm -f '$tmp_out'" RETURN
 
-  local issue rule_key component start_line end_line rule_obj snippet_obj
+  local issue issue_key rule_key component start_line end_line rule_obj snippet_obj
   while IFS= read -r issue; do
+    issue_key=$(echo "$issue" | jq -r '.key // ""')
     rule_key=$(echo "$issue" | jq -r '.rule // ""')
     component=$(echo "$issue" | jq -r '.component // ""')
     start_line=$(echo "$issue" | jq -r '(.startLine // .line) // empty')
@@ -391,12 +415,29 @@ enrich_issue_objects() {
 
     rule_obj="{}"
     if [[ -n "$rule_mode" ]]; then
-      rule_obj=$(fetch_rule_details "$rule_key")
+      if ! rule_obj=$(fetch_rule_details "$rule_key"); then
+        log_error "Failed to enrich issue ${issue_key:-<unknown>} with rule details"
+        return 1
+      fi
     fi
 
     snippet_obj="{}"
     if [[ "$with_snippets" == "true" && -n "$start_line" ]]; then
-      snippet_obj=$(fetch_source_snippet "$component" "$start_line" "$end_line" "$context")
+      if ! snippet_obj=$(fetch_source_snippet "$component" "$start_line" "$end_line" "$context"); then
+        log_error "Failed to enrich issue ${issue_key:-<unknown>} with source snippet"
+        return 1
+      fi
+    fi
+
+    if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$rule_obj"; then
+      log_error "Invalid rule details payload while enriching issue ${issue_key:-<unknown>}"
+      log_error "Payload: ${rule_obj}"
+      return 1
+    fi
+    if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$snippet_obj"; then
+      log_error "Invalid source snippet payload while enriching issue ${issue_key:-<unknown>}"
+      log_error "Payload: ${snippet_obj}"
+      return 1
     fi
 
     # kcov-skip-start
@@ -450,12 +491,29 @@ enrich_hotspot_objects() {
 
     rule_obj="{}"
     if [[ -n "$rule_mode" && -n "$hs_key" ]]; then
-      rule_obj=$(fetch_hotspot_details "$hs_key" "$rule_key")
+      if ! rule_obj=$(fetch_hotspot_details "$hs_key" "$rule_key"); then
+        log_error "Failed to enrich hotspot ${hs_key} with rule details"
+        return 1
+      fi
     fi
 
     snippet_obj="{}"
     if [[ "$with_snippets" == "true" && -n "$start_line" ]]; then
-      snippet_obj=$(fetch_source_snippet "$component" "$start_line" "$end_line" "$context")
+      if ! snippet_obj=$(fetch_source_snippet "$component" "$start_line" "$end_line" "$context"); then
+        log_error "Failed to enrich hotspot ${hs_key} with source snippet"
+        return 1
+      fi
+    fi
+
+    if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$rule_obj"; then
+      log_error "Invalid hotspot rule details payload while enriching hotspot ${hs_key}"
+      log_error "Payload: ${rule_obj}"
+      return 1
+    fi
+    if ! jq -e 'type == "object"' >/dev/null 2>&1 <<< "$snippet_obj"; then
+      log_error "Invalid source snippet payload while enriching hotspot ${hs_key}"
+      log_error "Payload: ${snippet_obj}"
+      return 1
     fi
 
     # kcov-skip-start

@@ -116,13 +116,28 @@ setup() {
   [[ "$fix" == *"Refactor the method"* ]]
 }
 
-@test "fetch_rule_details: returns empty object on API failure" {
-  sonar_api_get() { return 1; }
+@test "fetch_rule_details: fails and preserves API error logs" {
+  sonar_api_get() {
+    echo "[ERROR] API 404 — GET rules/show?key=java%3AS2259" >&2
+    echo '[ERROR] Response: {"errors":[{"msg":"Rule not found"}]}' >&2
+    return 1
+  }
   export -f sonar_api_get
 
   run fetch_rule_details "java:S2259"
-  [ "$status" -eq 0 ]
-  [ "$output" = "{}" ]
+  [ "$status" -ne 0 ]
+  [[ "$output" == *'Response: {"errors":[{"msg":"Rule not found"}]}'* ]]
+  [[ "$output" == *"Failed to fetch rule details for java:S2259"* ]]
+}
+
+@test "fetch_rule_details: fails on invalid JSON response and logs body" {
+  sonar_api_get() { echo 'not-json'; }
+  export -f sonar_api_get
+
+  run fetch_rule_details "java:S2259"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid JSON response from rules/show?key=java%3AS2259"* ]]
+  [[ "$output" == *"Response: not-json"* ]]
 }
 
 @test "fetch_rule_details: returns empty object on empty rule" {
@@ -165,8 +180,10 @@ setup() {
   }
   export -f sonar_api_get counter_file_increment
 
-  fetch_rule_details "java:S2259" >/dev/null
-  fetch_rule_details "java:S2259" >/dev/null
+  run fetch_rule_details "java:S2259"
+  [ "$status" -ne 0 ]
+  run fetch_rule_details "java:S2259"
+  [ "$status" -ne 0 ]
   local count
   count=$(cat "$_CALL_CTR")
   rm -f "$_CALL_CTR"
@@ -247,13 +264,12 @@ setup() {
   [ "$count" -eq 1 ]
 }
 
-@test "fetch_hotspot_details: returns empty object on API failure" {
+@test "fetch_hotspot_details: fails on API failure" {
   sonar_api_get() { return 1; }
   export -f sonar_api_get
 
   run fetch_hotspot_details "HS1" "java:S3649"
-  [ "$status" -eq 0 ]
-  [ "$output" = "{}" ]
+  [ "$status" -ne 0 ]
 }
 
 # ===========================================================================
@@ -335,13 +351,12 @@ setup() {
   [ "$count" -gt 0 ]
 }
 
-@test "fetch_source_snippet: returns empty object on API failure" {
+@test "fetch_source_snippet: fails on API failure" {
   sonar_api_get() { return 1; }
   export -f sonar_api_get
 
   run fetch_source_snippet "my-project:src/Missing.java" 1 1 3
-  [ "$status" -eq 0 ]
-  [ "$output" = "{}" ]
+  [ "$status" -ne 0 ]
 }
 
 @test "fetch_source_snippet: returns empty object on missing line" {
@@ -363,9 +378,12 @@ setup() {
   }
   export -f sonar_api_get counter_file_increment
 
-  fetch_source_snippet "my-project:src/Missing.java" 1 1 3 >/dev/null
-  fetch_source_snippet "my-project:src/Missing.java" 2 2 3 >/dev/null
-  fetch_source_snippet "my-project:src/Missing.java" 3 3 3 >/dev/null
+  run fetch_source_snippet "my-project:src/Missing.java" 1 1 3
+  [ "$status" -ne 0 ]
+  run fetch_source_snippet "my-project:src/Missing.java" 2 2 3
+  [ "$status" -ne 0 ]
+  run fetch_source_snippet "my-project:src/Missing.java" 3 3 3
+  [ "$status" -ne 0 ]
   local count
   count=$(cat "$_CALL_CTR")
   rm -f "$_CALL_CTR"
@@ -437,6 +455,20 @@ setup() {
   [ "$key" = "K1" ]
   [ "$sev" = "CRITICAL" ]
   [ "$effort" = "5min" ]
+}
+
+@test "enrich_issue_objects: fails with clear error when rule payload is invalid" {
+  export INCLUDE_RULE_DESCRIPTIONS="short"
+  export INCLUDE_CODE_SNIPPETS="false"
+
+  fetch_rule_details() { echo 'not-json'; }
+  export -f fetch_rule_details
+
+  local issues='[{"key":"K1","rule":"java:S2259","component":"p:src/A.java","line":5,"startLine":5,"endLine":5}]'
+  run enrich_issue_objects "$issues"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Invalid rule details payload while enriching issue K1"* ]]
+  [[ "$output" == *"Payload: not-json"* ]]
 }
 
 # ===========================================================================
