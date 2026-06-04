@@ -365,13 +365,14 @@ fetch_source_snippet() {
     --argjson hs "$start_line" \
     --argjson he "$end_line" '
     (if . == "" then [] else (sub("\n$"; "") | split("\n")) end) as $lines
+    | ([$s - 1, 0] | max) as $lo
+    | ([$e - 1, ($lines | length) - 1] | min) as $hi
     | {
         startLine: $s,
         endLine: $e,
         lines: [
-          range(0; ($lines | length)) as $i
+          range($lo; $hi + 1) as $i
           | ($i + 1) as $n
-          | select($n >= $s and $n <= $e)
           | {
               n: $n,
               text: ($lines[$i] | gsub("\r"; "")),

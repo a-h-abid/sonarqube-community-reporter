@@ -1,0 +1,11 @@
+package com.example;
+
+public class Tricky {
+
+	private static final String QUOTE = "He said \"hello\"";
+	private static final String BACKSLASH = "C:\\Users\\test\\file.txt";
+	private static final String BOTH = "path: \"C:\\\\tmp\"";
+	private static final String UNICODE = "\u0041\u0042\u0043";
+	private static final String CONTROL = "newline:\nnot really";
+
+}

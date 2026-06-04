@@ -537,6 +537,26 @@ setup() {
   [[ "$output" == *'"lines"'* ]]
 }
 
+@test "fetch_source_snippet: produces valid JSON and preserves text for lines with quotes backslashes and tabs" {
+  sonar_api_get() { cat "${FIXTURES}/source_raw_special.txt"; }
+  export -f sonar_api_get
+
+  # Request lines 5-7 with no extra context (those lines contain ", \, and tabs)
+  run fetch_source_snippet "p:Tricky.java" 5 7 0
+  [ "$status" -eq 0 ]
+
+  # Output must be parseable JSON
+  echo "$output" | jq -e . >/dev/null
+
+  # The line containing double-quotes must round-trip intact
+  quote_line=$(echo "$output" | jq -r '.lines[] | select(.n == 5) | .text')
+  [[ "$quote_line" == *'"'* ]]
+
+  # The line containing backslashes must round-trip intact
+  backslash_line=$(echo "$output" | jq -r '.lines[] | select(.n == 6) | .text')
+  [[ "$backslash_line" == *'\\'* ]]
+}
+
 @test "enrich_issue_objects: pre-fetches rule details when descriptions enabled" {
   export INCLUDE_RULE_DESCRIPTIONS="short"
   export INCLUDE_CODE_SNIPPETS="false"
