@@ -537,12 +537,12 @@ setup() {
   [[ "$output" == *'"lines"'* ]]
 }
 
-@test "fetch_source_snippet: produces valid JSON and preserves text for lines with quotes backslashes and tabs" {
+@test "fetch_source_snippet: produces valid JSON and preserves text for lines with quotes and backslashes" {
   sonar_api_get() { cat "${FIXTURES}/source_raw_special.txt"; }
   export -f sonar_api_get
 
-  # Request lines 5-7 with no extra context (those lines contain ", \, and tabs)
-  run fetch_source_snippet "p:Tricky.java" 5 7 0
+  # Request lines 5-9 (those lines contain ", \, \u, \n sequences)
+  run fetch_source_snippet "p:Tricky.java" 5 9 0
   [ "$status" -eq 0 ]
 
   # Output must be parseable JSON
@@ -555,6 +555,13 @@ setup() {
   # The line containing backslashes must round-trip intact
   backslash_line=$(echo "$output" | jq -r '.lines[] | select(.n == 6) | .text')
   [[ "$backslash_line" == *'\\'* ]]
+
+  # Lines with \u and \n escape sequences in source text must round-trip intact
+  unicode_line=$(echo "$output" | jq -r '.lines[] | select(.n == 8) | .text')
+  [[ "$unicode_line" == *'\u'* ]]
+
+  control_line=$(echo "$output" | jq -r '.lines[] | select(.n == 9) | .text')
+  [[ "$control_line" == *'\n'* ]]
 }
 
 @test "enrich_issue_objects: pre-fetches rule details when descriptions enabled" {
