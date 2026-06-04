@@ -364,6 +364,7 @@ fetch_source_snippet() {
     --argjson e "$snip_end" \
     --argjson hs "$start_line" \
     --argjson he "$end_line" '
+    # Split into lines; treat empty input as an empty file
     (if . == "" then [] else (sub("\n$"; "") | split("\n")) end) as $lines
     | ([$s - 1, 0] | max) as $lo
     | ([$e - 1, ($lines | length) - 1] | min) as $hi

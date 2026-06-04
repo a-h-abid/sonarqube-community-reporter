@@ -549,17 +549,21 @@ setup() {
   echo "$output" | jq -e . >/dev/null
 
   # The line containing double-quotes must round-trip intact
+  local quote_line
   quote_line=$(echo "$output" | jq -r '.lines[] | select(.n == 5) | .text')
   [[ "$quote_line" == *'"'* ]]
 
   # The line containing backslashes must round-trip intact
+  local backslash_line
   backslash_line=$(echo "$output" | jq -r '.lines[] | select(.n == 6) | .text')
   [[ "$backslash_line" == *'\\'* ]]
 
   # Lines with \u and \n escape sequences in source text must round-trip intact
+  local unicode_line
   unicode_line=$(echo "$output" | jq -r '.lines[] | select(.n == 8) | .text')
   [[ "$unicode_line" == *'\u'* ]]
 
+  local control_line
   control_line=$(echo "$output" | jq -r '.lines[] | select(.n == 9) | .text')
   [[ "$control_line" == *'\n'* ]]
 }
