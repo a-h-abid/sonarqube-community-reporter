@@ -33,14 +33,44 @@ jobs:
   test:
     name: bats test suite + coverage (kcov)
     runs-on: ubuntu-latest
+    env:
+      # kcov was dropped from Ubuntu's repos (24.04+) and ships no prebuilt
+      # binaries, so we build it from source and cache the result.
+      KCOV_VERSION: v43
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install runtime dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y bats jq kcov
+          sudo apt-get install -y bats jq libcurl4 libdw1 libelf1 libbinutils
+
+      - name: Cache kcov
+        id: cache-kcov
+        uses: actions/cache@v4
+        with:
+          path: ~/.local/kcov
+          key: kcov-${{ env.KCOV_VERSION }}-${{ runner.os }}
+
+      - name: Build kcov from source
+        if: steps.cache-kcov.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y \
+            build-essential cmake binutils-dev \
+            libcurl4-openssl-dev libdw-dev libelf-dev \
+            libiberty-dev zlib1g-dev libssl-dev libstdc++-12-dev
+          tmpdir="$(mktemp -d)"
+          git clone --depth 1 --branch "${KCOV_VERSION}" \
+            https://github.com/SimonKagstrom/kcov.git "${tmpdir}/kcov"
+          cmake -S "${tmpdir}/kcov" -B "${tmpdir}/build" \
+            -DCMAKE_INSTALL_PREFIX="${HOME}/.local/kcov"
+          cmake --build "${tmpdir}/build" --parallel "$(nproc)"
+          cmake --install "${tmpdir}/build"
+          rm -rf "${tmpdir}"
+
+      - name: Add kcov to PATH
+        run: echo "${HOME}/.local/kcov/bin" >> "$GITHUB_PATH"
 
       - name: Verify tool versions
         run: |
