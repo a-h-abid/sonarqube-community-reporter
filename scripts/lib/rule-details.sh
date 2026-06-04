@@ -335,7 +335,7 @@ fetch_source_snippet() {
 
   if [[ -n "${_COMPONENT_NEGATIVE[$component_key]:-}" ]]; then
     echo "{}"
-    return 0
+    return 1
   fi
 
   local raw
