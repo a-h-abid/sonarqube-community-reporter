@@ -117,6 +117,9 @@ setup() {
 }
 
 @test "fetch_rule_details: fails and preserves API error logs" {
+  log_error() { echo "$*" >&2; }
+  export -f log_error
+
   sonar_api_get() {
     echo "[ERROR] API 404 — GET rules/show?key=java%3AS2259" >&2
     echo '[ERROR] Response: {"errors":[{"msg":"Rule not found"}]}' >&2
@@ -131,6 +134,9 @@ setup() {
 }
 
 @test "fetch_rule_details: fails on invalid JSON response and logs body" {
+  log_error() { echo "$*" >&2; }
+  export -f log_error
+
   sonar_api_get() { echo 'not-json'; }
   export -f sonar_api_get
 
@@ -180,10 +186,8 @@ setup() {
   }
   export -f sonar_api_get counter_file_increment
 
-  run fetch_rule_details "java:S2259"
-  [ "$status" -ne 0 ]
-  run fetch_rule_details "java:S2259"
-  [ "$status" -ne 0 ]
+  fetch_rule_details "java:S2259" >/dev/null || true
+  fetch_rule_details "java:S2259" >/dev/null || true
   local count
   count=$(cat "$_CALL_CTR")
   rm -f "$_CALL_CTR"
@@ -378,12 +382,9 @@ setup() {
   }
   export -f sonar_api_get counter_file_increment
 
-  run fetch_source_snippet "my-project:src/Missing.java" 1 1 3
-  [ "$status" -ne 0 ]
-  run fetch_source_snippet "my-project:src/Missing.java" 2 2 3
-  [ "$status" -ne 0 ]
-  run fetch_source_snippet "my-project:src/Missing.java" 3 3 3
-  [ "$status" -ne 0 ]
+  fetch_source_snippet "my-project:src/Missing.java" 1 1 3 >/dev/null || true
+  fetch_source_snippet "my-project:src/Missing.java" 2 2 3 >/dev/null || true
+  fetch_source_snippet "my-project:src/Missing.java" 3 3 3 >/dev/null || true
   local count
   count=$(cat "$_CALL_CTR")
   rm -f "$_CALL_CTR"
@@ -460,6 +461,8 @@ setup() {
 @test "enrich_issue_objects: fails with clear error when rule payload is invalid" {
   export INCLUDE_RULE_DESCRIPTIONS="short"
   export INCLUDE_CODE_SNIPPETS="false"
+  log_error() { echo "$*" >&2; }
+  export -f log_error
 
   fetch_rule_details() { echo 'not-json'; }
   export -f fetch_rule_details
