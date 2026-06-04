@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Run ShellCheck
         run: |
@@ -39,7 +39,7 @@ jobs:
       KCOV_VERSION: v43
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Install runtime dependencies
         run: |
@@ -48,7 +48,7 @@ jobs:
 
       - name: Cache kcov
         id: cache-kcov
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: ~/.local/kcov
           key: kcov-${{ env.KCOV_VERSION }}-${{ runner.os }}
@@ -82,7 +82,7 @@ jobs:
         run: bash tests/run_coverage.sh --min-coverage 92
 
       - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: coverage-report
           path: reports/coverage/
