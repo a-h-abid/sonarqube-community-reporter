@@ -1,3 +1,6 @@
+// Synthetic source fixture — raw text as returned by /api/sources/raw.
+// The escape sequences below (\", \\, \u, \n) are literal characters in the
+// source file; they are NOT interpreted by a Java compiler in this context.
 package com.example;
 
 public class Tricky {
