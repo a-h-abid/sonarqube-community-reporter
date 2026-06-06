@@ -14,7 +14,7 @@ _RULE_DETAILS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${_RULE_DETAILS_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
-# In-memory caches (associative arrays — bash 4+).
+# In-memory caches (associative arrays + declare -g — bash 4.2+; project requires 4.4+).
 # ---------------------------------------------------------------------------
 declare -gA _RULE_CACHE=()
 declare -gA _HOTSPOT_RULE_CACHE=()

@@ -7,13 +7,18 @@
 | Tool | Version | Purpose |
 |------|---------|---------|
 | Docker + Docker Compose | v2+ (Compose Specification) | Run SonarQube and the report tool |
-| `bash` | 4.0+ | Script runtime |
+| `bash` | 4.4+ | Script runtime |
 | `curl` | Any | API calls |
 | `jq` | 1.6+ | JSON processing |
 | `wkhtmltopdf` | Any | PDF generation (optional) |
 | `gnumeric` (`ssconvert`) | Any | XLSX/ODS generation (optional) |
 | `bats` | 1.x | Running the test suite (optional) |
 | `kcov` | Any | Bash line coverage measurement (optional) |
+
+> **Bash 4.4+ is required.** The scripts run under `set -euo pipefail`, and versions older than 4.4
+> error on empty-array expansion — bash 4.2/4.3 fail at runtime with `unbound variable`. On older
+> systems, run the tool via the Docker image (it bundles bash 5.2) or upgrade bash;
+> `scripts/sonar-report.sh` checks the version at startup and exits with a clear message if it's too old.
 
 ---
 

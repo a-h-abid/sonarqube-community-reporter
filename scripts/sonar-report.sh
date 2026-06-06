@@ -60,6 +60,15 @@
 # ==============================================================================
 set -euo pipefail
 
+# Require bash 4.4+: the scripts run under `set -u`, which errors on empty-array
+# expansion in bash older than 4.4 (and `declare -g` needs 4.2). This runs before
+# the library `source`s, so the `log_*` helpers don't exist yet — use plain echo.
+if (( BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4) )); then
+  echo "Error: requires bash 4.4+ (found ${BASH_VERSINFO[0]}.${BASH_VERSINFO[1]}.${BASH_VERSINFO[2]:-0})." >&2
+  echo "Upgrade bash, or run via the project's Docker image (it bundles bash 5.2)." >&2
+  exit 1
+fi
+
 _MAIN_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source .env from parent directory if it exists.

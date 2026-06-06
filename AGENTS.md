@@ -4,6 +4,12 @@
 
 ### Shell Script Standards
 
+- **Minimum Bash version:** Target **bash 4.4+**. The scripts run under `set -euo pipefail`, and bash
+  older than 4.4 errors on empty-array expansion (`"${arr[@]}"` when the array is empty) — bash 4.2/4.3
+  fail at runtime with `unbound variable`; `declare -g` additionally requires 4.2. `scripts/sonar-report.sh`
+  enforces this with a `BASH_VERSINFO` guard. Do **not** introduce bash 5.0+-only features (e.g.
+  `EPOCHSECONDS`, `SRANDOM`, `${ …; }` value/function substitution, `${var@U/@L/@K}` transforms) so the
+  4.4 floor holds. Smoke-test shell changes on `bash:4.4` (e.g. the `--dry-run` path) when touching script logic.
 - **Shebang:** Always use `#!/usr/bin/env bash`
 - **Strict mode:** Always set `set -euo pipefail` at the top of every script
 - **Quoting:** Always double-quote variables: `"$var"`, `"${var}"`
