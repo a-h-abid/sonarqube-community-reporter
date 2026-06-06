@@ -10,7 +10,7 @@ _RULE_DETAILS_SH_LOADED=1
 set -euo pipefail
 
 _RULE_DETAILS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_RULE_DETAILS_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
@@ -420,7 +420,7 @@ enrich_issue_objects() {
   fi
 
   local tmp_out
-  tmp_out=$(mktemp)
+  tmp_out=$(create_temp_file)
   # shellcheck disable=SC2064
   trap "rm -f '$tmp_out'" RETURN
 
@@ -493,7 +493,7 @@ enrich_hotspot_objects() {
   fi
 
   local tmp_out
-  tmp_out=$(mktemp)
+  tmp_out=$(create_temp_file)
   # shellcheck disable=SC2064
   trap "rm -f '$tmp_out'" RETURN
 

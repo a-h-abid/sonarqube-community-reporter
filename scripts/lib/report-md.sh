@@ -9,7 +9,7 @@ _REPORT_MD_SH_LOADED=1
 set -euo pipefail
 
 _REPORT_MD_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_REPORT_MD_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------

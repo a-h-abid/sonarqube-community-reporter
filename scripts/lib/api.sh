@@ -8,6 +8,9 @@ _API_SH_LOADED=1
 
 set -euo pipefail
 
+_API_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+_API_PROJECT_ROOT="$(cd "${_API_SCRIPT_DIR}/../.." && pwd)"
+
 # Colours (disabled when stdout is not a terminal)
 if [[ -t 1 ]]; then
   RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
@@ -49,6 +52,27 @@ log_warn()  { echo -e "${YELLOW}[WARN]${NC}  $*" >&2; }
 log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 
 # ---------------------------------------------------------------------------
+# Project-local temp helpers
+# ---------------------------------------------------------------------------
+project_tmp_dir() {
+  local tmp_dir="${SONAR_REPORT_TMP_DIR:-${_API_PROJECT_ROOT}/tmp}"
+  mkdir -p "$tmp_dir" || return 1
+  echo "$tmp_dir"
+}
+
+create_temp_file() {
+  local tmp_dir
+  tmp_dir=$(project_tmp_dir) || return 1
+  mktemp "${tmp_dir}/sonar-report.XXXXXX"
+}
+
+create_temp_dir() {
+  local tmp_dir
+  tmp_dir=$(project_tmp_dir) || return 1
+  mktemp -d "${tmp_dir}/sonar-report.XXXXXX"
+}
+
+# ---------------------------------------------------------------------------
 # sonar_api_get <endpoint> [extra_curl_args...]
 #   Makes an authenticated GET request to the SonarQube/SonarCloud API.
 #   Prints the JSON response body to stdout.
@@ -78,7 +102,7 @@ sonar_api_get() {
 
   # Use a temp file for body so we can capture HTTP status separately
   local tmpfile
-  tmpfile=$(mktemp)
+  tmpfile=$(create_temp_file)
   # Guard prevents the trap from failing when it fires in an outer caller's
   # scope (where $tmpfile is unset) due to bash RETURN traps being shell-wide.
   trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile"' RETURN
@@ -122,7 +146,7 @@ sonar_api_paginated() {
   # Accumulate pages into a temp file (one JSON array per line) to avoid
   # O(n²) in-memory merging that degrades badly on large datasets.
   local tmp_pages
-  tmp_pages=$(mktemp)
+  tmp_pages=$(create_temp_file)
   trap '[[ -n "${tmp_pages:-}" ]] && rm -f "$tmp_pages"' RETURN
 
   while true; do

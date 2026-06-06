@@ -54,6 +54,30 @@ setup() {
 }
 
 # ===========================================================================
+# Project-local temp helpers
+# ===========================================================================
+
+@test "create_temp_file: creates files under project tmp" {
+  local tmp_file
+  tmp_file=$(create_temp_file)
+
+  [[ "$tmp_file" == "${REPO_ROOT}/tmp/sonar-report."* ]]
+  [ -f "$tmp_file" ]
+
+  rm -f "$tmp_file"
+}
+
+@test "create_temp_dir: creates directories under project tmp" {
+  local tmp_dir
+  tmp_dir=$(create_temp_dir)
+
+  [[ "$tmp_dir" == "${REPO_ROOT}/tmp/sonar-report."* ]]
+  [ -d "$tmp_dir" ]
+
+  rm -rf "$tmp_dir"
+}
+
+# ===========================================================================
 # rating_to_letter
 # ===========================================================================
 

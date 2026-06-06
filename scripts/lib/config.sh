@@ -11,7 +11,7 @@ set -euo pipefail
 _CONFIG_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Source api.sh for logging helpers
-# shellcheck source=api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_CONFIG_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------

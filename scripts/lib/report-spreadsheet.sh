@@ -8,7 +8,7 @@ _REPORT_SPREADSHEET_SH_LOADED=1
 set -euo pipefail
 
 _REPORT_SPREADSHEET_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_REPORT_SPREADSHEET_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
@@ -76,7 +76,7 @@ generate_spreadsheet_report() {
   mkdir -p "$output_dir"
 
   local tmpdir
-  tmpdir=$(mktemp -d)
+  tmpdir=$(create_temp_dir)
   trap '[[ -n "${tmpdir:-}" ]] && rm -rf "$tmpdir"' RETURN
 
   local summary_csv="${tmpdir}/Overall Summary.csv"

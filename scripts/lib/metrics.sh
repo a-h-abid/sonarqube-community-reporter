@@ -9,9 +9,9 @@ _METRICS_SH_LOADED=1
 set -euo pipefail
 
 _METRICS_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_METRICS_SCRIPT_DIR}/api.sh"
-# shellcheck source=rule-details.sh
+# shellcheck source=scripts/lib/rule-details.sh
 source "${_METRICS_SCRIPT_DIR}/rule-details.sh"
 
 # ---------------------------------------------------------------------------

@@ -8,7 +8,7 @@ _REPORT_XLSX_SH_LOADED=1
 set -euo pipefail
 
 _REPORT_XLSX_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=report-spreadsheet.sh
+# shellcheck source=scripts/lib/report-spreadsheet.sh
 source "${_REPORT_XLSX_SCRIPT_DIR}/report-spreadsheet.sh"
 
 # ---------------------------------------------------------------------------

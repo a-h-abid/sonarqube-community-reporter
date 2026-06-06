@@ -17,7 +17,7 @@
 set -euo pipefail
 
 _WAIT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=lib/api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_WAIT_SCRIPT_DIR}/lib/api.sh"
 
 # ---------------------------------------------------------------------------

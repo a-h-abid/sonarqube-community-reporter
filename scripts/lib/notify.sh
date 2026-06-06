@@ -9,7 +9,7 @@ _NOTIFY_SH_LOADED=1
 set -euo pipefail
 
 _NOTIFY_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_NOTIFY_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
@@ -94,7 +94,7 @@ send_webhook_notification() {
   # kcov-skip-end
 
   local tmpfile
-  tmpfile=$(mktemp)
+  tmpfile=$(create_temp_file)
   # Guard prevents the trap from failing if it fires before $tmpfile is
   # assigned (e.g. if mktemp fails partway through the function).
   trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile"' RETURN

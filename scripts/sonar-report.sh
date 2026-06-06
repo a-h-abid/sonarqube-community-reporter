@@ -79,29 +79,29 @@ if [[ -f "${_MAIN_SCRIPT_DIR}/../.env" ]]; then
 fi
 
 # Source library modules
-# shellcheck source=lib/api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_MAIN_SCRIPT_DIR}/lib/api.sh"
-# shellcheck source=lib/config.sh
+# shellcheck source=scripts/lib/config.sh
 source "${_MAIN_SCRIPT_DIR}/lib/config.sh"
-# shellcheck source=lib/metrics.sh
+# shellcheck source=scripts/lib/metrics.sh
 source "${_MAIN_SCRIPT_DIR}/lib/metrics.sh"
-# shellcheck source=lib/report-json.sh
+# shellcheck source=scripts/lib/report-json.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-json.sh"
-# shellcheck source=lib/report-md.sh
+# shellcheck source=scripts/lib/report-md.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-md.sh"
-# shellcheck source=lib/report-html.sh
+# shellcheck source=scripts/lib/report-html.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-html.sh"
-# shellcheck source=lib/report-pdf.sh
+# shellcheck source=scripts/lib/report-pdf.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-pdf.sh"
-# shellcheck source=lib/report-xlsx.sh
+# shellcheck source=scripts/lib/report-xlsx.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-xlsx.sh"
-# shellcheck source=lib/report-ods.sh
+# shellcheck source=scripts/lib/report-ods.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-ods.sh"
-# shellcheck source=lib/report-csv.sh
+# shellcheck source=scripts/lib/report-csv.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-csv.sh"
-# shellcheck source=lib/notify.sh
+# shellcheck source=scripts/lib/notify.sh
 source "${_MAIN_SCRIPT_DIR}/lib/notify.sh"
-# shellcheck source=wait-for-analysis.sh
+# shellcheck source=scripts/wait-for-analysis.sh
 source "${_MAIN_SCRIPT_DIR}/wait-for-analysis.sh"
 
 # ===========================================================================
@@ -482,7 +482,7 @@ main() {
     # Write report data to a temp file to avoid holding large JSON in shell
     # variables and passing it as function arguments (which degrades with
     # large issue sets).
-    report_data_file=$(mktemp)
+    report_data_file=$(create_temp_file)
     _owned_report_data_file="yes"
     trap '[[ -n "$_owned_report_data_file" ]] && rm -f "$report_data_file"' EXIT
 

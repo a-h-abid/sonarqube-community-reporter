@@ -9,7 +9,7 @@ _REPORT_PDF_SH_LOADED=1
 set -euo pipefail
 
 _REPORT_PDF_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_REPORT_PDF_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
@@ -41,7 +41,13 @@ generate_pdf_report() {
   local filepath="${output_dir}/${basename}.pdf"
   mkdir -p "$output_dir"
 
-  temp_html=$(mktemp "${TMPDIR:-/tmp}/sonar-report-pdf.XXXXXX.html")
+  local temp_base
+  temp_base=$(create_temp_file)
+  temp_html="${temp_base}.html"
+  mv "$temp_base" "$temp_html" || {
+    rm -f "$temp_base"
+    return 1
+  }
   # Guard prevents the trap from failing under `set -u` when it fires in an
   # outer caller's scope (where $temp_html is unset) — bash RETURN traps are
   # shell-wide. Mirrors the pattern used in report-html.sh / notify.sh.

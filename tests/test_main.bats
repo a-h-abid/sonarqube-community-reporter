@@ -163,8 +163,10 @@ setup() {
 # ===========================================================================
 
 @test "parse_args: --dry-run sets DRY_RUN_FILE" {
-  parse_args --dry-run "/tmp/report.json" --project-key "p"
-  [ "$DRY_RUN_FILE" = "/tmp/report.json" ]
+  local dry_run_file="${BATS_TEST_TMPDIR}/report.json"
+
+  parse_args --dry-run "$dry_run_file" --project-key "p"
+  [ "$DRY_RUN_FILE" = "$dry_run_file" ]
 }
 
 @test "parse_args: --notify-webhook sets NOTIFY_WEBHOOK" {

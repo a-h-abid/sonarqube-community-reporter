@@ -9,7 +9,7 @@ _REPORT_HTML_SH_LOADED=1
 set -euo pipefail
 
 _REPORT_HTML_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# shellcheck source=api.sh
+# shellcheck source=scripts/lib/api.sh
 source "${_REPORT_HTML_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
@@ -181,7 +181,7 @@ generate_html_report() {
   # Multiline / complex HTML replacements — use file-based awk to avoid
   # sed delimiter issues (|, &) and awk -v escape interpretation (\n, \t).
   local tmpfile
-  tmpfile=$(mktemp)
+  tmpfile=$(create_temp_file)
   # Guard prevents the trap from failing when it fires in an outer caller's
   # scope (where $tmpfile is unset) due to bash RETURN traps being shell-wide.
   trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile" "${tmpfile}.tmp" "${tmpfile}.rep"' RETURN
