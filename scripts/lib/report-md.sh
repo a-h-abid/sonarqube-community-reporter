@@ -110,8 +110,25 @@ generate_md_report() {
 | **Last Analysis Date** | ${last_analysis_date} |
 | **Analysis ID** | ${analysis_id} |
 | **SonarQube URL** | ${sonar_url} |
+$(echo "$report_data" | jq -r '
+  if (.metadata | has("qualityGateName"))
+  then "| **Quality Gate** | " + (((.metadata.qualityGateName // "") | if . == "" then "N/A" else . end) | gsub("<"; "&lt;") | gsub(">"; "&gt;")) + " |"
+  else empty end')
 
 ---
+
+$(echo "$report_data" | jq -r '
+  def esc: (. // "") | tostring | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+  if (.metadata | has("qualityProfiles")) then
+    (.metadata.qualityProfiles // []) as $p |
+    if ($p | length) > 0 then
+      "## Quality Profiles\n\n| Language | Profile |\n|----------|---------|\n" +
+      ([$p[] | "| " + ((.languageName // .language) | esc) + " | " + (.name | esc) + " |"] | join("\n")) +
+      "\n\n---"
+    else
+      "## Quality Profiles\n\n_No quality profiles found._\n\n---"
+    end
+  else empty end')
 
 ## Quality Gate: ${qg_badge}
 

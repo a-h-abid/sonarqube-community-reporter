@@ -39,6 +39,14 @@
 #                                                       (env: INCLUDE_CODE_SNIPPETS)
 #   --snippet-context N    Lines of context around the affected lines (default: 3)
 #                                                       (env: SNIPPET_CONTEXT)
+#   --include-quality-profiles
+#                          Show the Quality Profiles (rule sets, one per language)
+#                          applied during analysis, in all report formats.
+#                                                       (env: INCLUDE_QUALITY_PROFILES)
+#   --include-quality-gate-name
+#                          Show the name of the Quality Gate applied during
+#                          analysis, in all report formats.
+#                                                       (env: INCLUDE_QUALITY_GATE_NAME)
 #   --config FILE          Load configuration from FILE (default: auto-detect
 #                          .sonar-report.yml or sonar-report.conf)
 #   -h, --help             Show this help
@@ -96,6 +104,7 @@ for _var in SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_TASK_ID \
             SONAR_ORGANIZATION SONAR_CLOUD REPORT_FORMATS REPORT_OUTPUT_DIR \
             POLL_INTERVAL POLL_TIMEOUT ANALYSIS_ID DRY_RUN_FILE NOTIFY_WEBHOOK \
             INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT \
+            INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME \
             WAIT_FOR_ANALYSIS FAIL_ON_GATE; do
   if [[ -n "${!_var:-}" ]]; then
     _ENV_SNAPSHOT_VARS="${_ENV_SNAPSHOT_VARS} ${_var}"
@@ -128,6 +137,8 @@ apply_defaults() {
   [[ -z "${INCLUDE_RULE_DESCRIPTIONS:-}" ]] && INCLUDE_RULE_DESCRIPTIONS=""
   [[ -z "${INCLUDE_CODE_SNIPPETS:-}" ]]     && INCLUDE_CODE_SNIPPETS="false"
   [[ -z "${SNIPPET_CONTEXT:-}" ]]           && SNIPPET_CONTEXT="3"
+  [[ -z "${INCLUDE_QUALITY_PROFILES:-}" ]]  && INCLUDE_QUALITY_PROFILES="false"
+  [[ -z "${INCLUDE_QUALITY_GATE_NAME:-}" ]] && INCLUDE_QUALITY_GATE_NAME="false"
   [[ -z "${WAIT_FOR_ANALYSIS:-}" ]]         && WAIT_FOR_ANALYSIS="false"
   [[ -z "${FAIL_ON_GATE:-}" ]]              && FAIL_ON_GATE="false"
 
@@ -170,6 +181,10 @@ parse_args() {
         INCLUDE_CODE_SNIPPETS=true;       shift ;;
       --snippet-context)
         SNIPPET_CONTEXT="$2";             shift 2 ;;
+      --include-quality-profiles)
+        INCLUDE_QUALITY_PROFILES=true;    shift ;;
+      --include-quality-gate-name)
+        INCLUDE_QUALITY_GATE_NAME=true;   shift ;;
       -h|--help)         show_help ;;
       *)
         log_error "Unknown option: $1"
@@ -231,6 +246,26 @@ validate_enrichment_flags() {
     log_warn "SNIPPET_CONTEXT=${SNIPPET_CONTEXT} is unusually large — clamping to 50"
     SNIPPET_CONTEXT=50
   fi
+
+  # Normalize INCLUDE_QUALITY_PROFILES to "true"/"false"
+  case "${INCLUDE_QUALITY_PROFILES:-false}" in
+    true|TRUE|yes|YES|1|on|ON)      INCLUDE_QUALITY_PROFILES="true"  ;;
+    false|FALSE|no|NO|0|off|OFF|"") INCLUDE_QUALITY_PROFILES="false" ;;
+    *)
+      log_error "Invalid INCLUDE_QUALITY_PROFILES value: '${INCLUDE_QUALITY_PROFILES}'"
+      return 1
+      ;;
+  esac
+
+  # Normalize INCLUDE_QUALITY_GATE_NAME to "true"/"false"
+  case "${INCLUDE_QUALITY_GATE_NAME:-false}" in
+    true|TRUE|yes|YES|1|on|ON)      INCLUDE_QUALITY_GATE_NAME="true"  ;;
+    false|FALSE|no|NO|0|off|OFF|"") INCLUDE_QUALITY_GATE_NAME="false" ;;
+    *)
+      log_error "Invalid INCLUDE_QUALITY_GATE_NAME value: '${INCLUDE_QUALITY_GATE_NAME}'"
+      return 1
+      ;;
+  esac
 }
 
 validate_report_formats() {
@@ -402,6 +437,12 @@ main() {
   fi
   if [[ "${INCLUDE_CODE_SNIPPETS:-false}" == "true" ]]; then
     log_info "Code snippets:    enabled (context=${SNIPPET_CONTEXT})"
+  fi
+  if [[ "${INCLUDE_QUALITY_PROFILES:-false}" == "true" ]]; then
+    log_info "Quality profiles: enabled"
+  fi
+  if [[ "${INCLUDE_QUALITY_GATE_NAME:-false}" == "true" ]]; then
+    log_info "Quality gate name: enabled"
   fi
   echo ""
 

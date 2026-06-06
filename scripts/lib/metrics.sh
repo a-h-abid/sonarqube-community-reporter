@@ -55,6 +55,45 @@ fetch_quality_gate() {
 }
 
 # ---------------------------------------------------------------------------
+# fetch_quality_gate_name
+#   Fetches the name of the quality gate assigned to the project.
+#   Output: gate name string, or empty when unavailable.
+#   Note: get_by_project uses the `project` query param (not `projectKey`),
+#   and is project-level (no branch parameter).
+# ---------------------------------------------------------------------------
+fetch_quality_gate_name() {
+  local project_key="${SONAR_PROJECT_KEY}"
+
+  local response
+  response=$(sonar_api_get "qualitygates/get_by_project?project=${project_key}") || return 1
+
+  echo "$response" | jq -r '.qualityGate.name // empty'
+}
+
+# ---------------------------------------------------------------------------
+# fetch_quality_profiles
+#   Fetches the quality profiles associated with the project (one per
+#   language used). Output: JSON array of {key, name, language, languageName}.
+#   Note: qualityprofiles/search uses the `project` query param and is
+#   project-level (no branch parameter).
+# ---------------------------------------------------------------------------
+fetch_quality_profiles() {
+  local project_key="${SONAR_PROJECT_KEY}"
+
+  local response
+  response=$(sonar_api_get "qualityprofiles/search?project=${project_key}") || return 1
+
+  # kcov-skip-start
+  echo "$response" | jq '[.profiles[]? | {
+    key: .key,
+    name: .name,
+    language: .language,
+    languageName: .languageName
+  }]'
+  # kcov-skip-end
+}
+
+# ---------------------------------------------------------------------------
 # fetch_measures
 #   Fetches all key metrics for the project.
 #   Output: JSON object with metric key-value pairs.
@@ -297,6 +336,33 @@ fetch_all_metrics() {
     fi
   fi
 
+  # Quality gate name — only fetched when INCLUDE_QUALITY_GATE_NAME is enabled.
+  # Audit metadata: failures degrade gracefully (logged) and never abort the run.
+  local quality_gate_name_json="null"
+  if [[ "${INCLUDE_QUALITY_GATE_NAME:-false}" == "true" ]]; then
+    log_info "Fetching quality gate name ..."
+    local qgn=""
+    if qgn=$(fetch_quality_gate_name); then
+      log_ok "Quality gate name fetched"
+    else
+      log_warn "Failed to fetch quality gate name; continuing without it"
+      qgn=""
+    fi
+    quality_gate_name_json=$(jq -n --arg n "$qgn" '$n')
+  fi
+
+  # Quality profiles — only fetched when INCLUDE_QUALITY_PROFILES is enabled.
+  local quality_profiles_json="null"
+  if [[ "${INCLUDE_QUALITY_PROFILES:-false}" == "true" ]]; then
+    log_info "Fetching quality profiles ..."
+    if quality_profiles_json=$(fetch_quality_profiles); then
+      log_ok "Quality profiles fetched"
+    else
+      log_warn "Failed to fetch quality profiles; continuing without them"
+      quality_profiles_json="[]"
+    fi
+  fi
+
   # Assemble the complete report data
   local report_date
   report_date=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
@@ -337,6 +403,8 @@ fetch_all_metrics() {
     --argjson sonarCloud "$sonar_cloud_bool" \
     --arg organization "${SONAR_ORGANIZATION:-}" \
     --argjson enrichment "$enrichment_json" \
+    --argjson qualityGateName "$quality_gate_name_json" \
+    --argjson qualityProfiles "$quality_profiles_json" \
     '{
       metadata: ({
         projectKey: $projectKey,
@@ -348,7 +416,9 @@ fetch_all_metrics() {
         analysisId: $analysisId,
         sonarCloud: $sonarCloud,
         organization: $organization
-      } + (if $enrichment == null then {} else {enrichment: $enrichment} end)),
+      } + (if $enrichment == null then {} else {enrichment: $enrichment} end)
+        + (if $qualityGateName == null then {} else {qualityGateName: $qualityGateName} end)
+        + (if $qualityProfiles == null then {} else {qualityProfiles: $qualityProfiles} end)),
       qualityGate: .[0],
       measures: .[1].measures,
       issuesSummary: .[2],

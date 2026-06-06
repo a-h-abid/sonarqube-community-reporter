@@ -1,0 +1,7 @@
+{
+  "qualityGate": {
+    "id": "8",
+    "name": "Sonar way",
+    "default": false
+  }
+}

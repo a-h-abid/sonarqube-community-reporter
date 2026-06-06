@@ -1,0 +1,22 @@
+{
+  "profiles": [
+    {
+      "key": "AY1java",
+      "name": "Sonar way",
+      "language": "java",
+      "languageName": "Java",
+      "isInherited": false,
+      "isDefault": true,
+      "activeRuleCount": 400
+    },
+    {
+      "key": "AY2py",
+      "name": "Custom Python",
+      "language": "py",
+      "languageName": "Python",
+      "isInherited": false,
+      "isDefault": false,
+      "activeRuleCount": 120
+    }
+  ]
+}

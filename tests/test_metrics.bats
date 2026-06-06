@@ -103,6 +103,118 @@ setup() {
 }
 
 # ===========================================================================
+# fetch_quality_gate_name
+# ===========================================================================
+
+@test "fetch_quality_gate_name: returns the gate name" {
+  sonar_api_get() { cat "${FIXTURES}/quality_gate_by_project.json"; }
+  export -f sonar_api_get
+
+  run fetch_quality_gate_name
+  [ "$status" -eq 0 ]
+  [ "$output" = "Sonar way" ]
+}
+
+@test "fetch_quality_gate_name: queries get_by_project with project= param" {
+  export _ENDPOINT_FILE
+  _ENDPOINT_FILE=$(mktemp)
+
+  sonar_api_get() {
+    echo "$1" >"$_ENDPOINT_FILE"
+    cat "${FIXTURES}/quality_gate_by_project.json"
+  }
+  export -f sonar_api_get
+
+  run fetch_quality_gate_name
+  local received_endpoint
+  received_endpoint=$(cat "$_ENDPOINT_FILE")
+  rm -f "$_ENDPOINT_FILE"
+  [ "$status" -eq 0 ]
+  [[ "$received_endpoint" == *"qualitygates/get_by_project?project=my-project"* ]]
+}
+
+@test "fetch_quality_gate_name: returns empty when gate name absent" {
+  sonar_api_get() { echo '{"qualityGate":{}}'; }
+  export -f sonar_api_get
+
+  run fetch_quality_gate_name
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+}
+
+@test "fetch_quality_gate_name: fails when API call fails" {
+  sonar_api_get() { return 1; }
+  export -f sonar_api_get
+
+  run fetch_quality_gate_name
+  [ "$status" -ne 0 ]
+}
+
+# ===========================================================================
+# fetch_quality_profiles
+# ===========================================================================
+
+@test "fetch_quality_profiles: returns array of profiles" {
+  sonar_api_get() { cat "${FIXTURES}/quality_profiles.json"; }
+  export -f sonar_api_get
+
+  run fetch_quality_profiles
+  [ "$status" -eq 0 ]
+  count=$(echo "$output" | jq 'length')
+  [ "$count" -eq 2 ]
+}
+
+@test "fetch_quality_profiles: projects key, name, language, languageName" {
+  sonar_api_get() { cat "${FIXTURES}/quality_profiles.json"; }
+  export -f sonar_api_get
+
+  run fetch_quality_profiles
+  [ "$status" -eq 0 ]
+  name=$(echo "$output" | jq -r '.[0].name')
+  language=$(echo "$output" | jq -r '.[0].language')
+  language_name=$(echo "$output" | jq -r '.[0].languageName')
+  [ "$name" = "Sonar way" ]
+  [ "$language" = "java" ]
+  [ "$language_name" = "Java" ]
+}
+
+@test "fetch_quality_profiles: queries qualityprofiles/search with project= param" {
+  export _ENDPOINT_FILE
+  _ENDPOINT_FILE=$(mktemp)
+
+  sonar_api_get() {
+    echo "$1" >"$_ENDPOINT_FILE"
+    cat "${FIXTURES}/quality_profiles.json"
+  }
+  export -f sonar_api_get
+
+  run fetch_quality_profiles
+  local received_endpoint
+  received_endpoint=$(cat "$_ENDPOINT_FILE")
+  rm -f "$_ENDPOINT_FILE"
+  [ "$status" -eq 0 ]
+  [[ "$received_endpoint" == *"qualityprofiles/search?project=my-project"* ]]
+}
+
+@test "fetch_quality_profiles: returns empty array when no profiles" {
+  sonar_api_get() { echo '{"profiles":[]}'; }
+  export -f sonar_api_get
+
+  run fetch_quality_profiles
+  [ "$status" -eq 0 ]
+  count=$(echo "$output" | jq 'length')
+  [ "$count" -eq 0 ]
+}
+
+@test "fetch_quality_profiles: fails when API call fails" {
+  sonar_api_get() { return 1; }
+  export -f sonar_api_get
+
+  run fetch_quality_profiles
+  [ "$status" -ne 0 ]
+}
+
+# ===========================================================================
 # fetch_measures
 # ===========================================================================
 
@@ -869,4 +981,118 @@ _mock_basic_fetchers() {
   [ "$status" -eq 0 ]
   cs=$(echo "$output" | jq -r '.metadata.enrichment.codeSnippets')
   [ "$cs" = "true" ]
+}
+
+# ===========================================================================
+# fetch_all_metrics — quality profiles & quality gate name
+# ===========================================================================
+
+@test "fetch_all_metrics: omits qualityGateName and qualityProfiles when flags off" {
+  unset INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  log_info() { :; }; log_ok() { :; }
+  export -f fetch_last_analysis_date log_info log_ok
+  export SONAR_CLOUD=false
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  has_gate_name=$(echo "$output" | jq '.metadata | has("qualityGateName")')
+  has_profiles=$(echo "$output" | jq '.metadata | has("qualityProfiles")')
+  [ "$has_gate_name" = "false" ]
+  [ "$has_profiles" = "false" ]
+}
+
+@test "fetch_all_metrics: includes qualityGateName when INCLUDE_QUALITY_GATE_NAME enabled" {
+  export INCLUDE_QUALITY_GATE_NAME=true
+  unset INCLUDE_QUALITY_PROFILES
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  fetch_quality_gate_name() { echo 'Sonar way'; }
+  log_info() { :; }; log_ok() { :; }
+  export -f fetch_last_analysis_date fetch_quality_gate_name log_info log_ok
+  export SONAR_CLOUD=false
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  gate_name=$(echo "$output" | jq -r '.metadata.qualityGateName')
+  [ "$gate_name" = "Sonar way" ]
+  has_profiles=$(echo "$output" | jq '.metadata | has("qualityProfiles")')
+  [ "$has_profiles" = "false" ]
+}
+
+@test "fetch_all_metrics: includes qualityProfiles when INCLUDE_QUALITY_PROFILES enabled" {
+  export INCLUDE_QUALITY_PROFILES=true
+  unset INCLUDE_QUALITY_GATE_NAME
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  fetch_quality_profiles() { echo '[{"key":"k","name":"Sonar way","language":"java","languageName":"Java"}]'; }
+  log_info() { :; }; log_ok() { :; }
+  export -f fetch_last_analysis_date fetch_quality_profiles log_info log_ok
+  export SONAR_CLOUD=false
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  count=$(echo "$output" | jq '.metadata.qualityProfiles | length')
+  name=$(echo "$output" | jq -r '.metadata.qualityProfiles[0].name')
+  [ "$count" -eq 1 ]
+  [ "$name" = "Sonar way" ]
+  has_gate_name=$(echo "$output" | jq '.metadata | has("qualityGateName")')
+  [ "$has_gate_name" = "false" ]
+}
+
+@test "fetch_all_metrics: qualityGateName present but empty when gate-name fetch fails" {
+  export INCLUDE_QUALITY_GATE_NAME=true
+  unset INCLUDE_QUALITY_PROFILES
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  fetch_quality_gate_name() { return 1; }
+  log_info() { :; }; log_ok() { :; }; log_warn() { :; }
+  export -f fetch_last_analysis_date fetch_quality_gate_name log_info log_ok log_warn
+  export SONAR_CLOUD=false
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  has_gate_name=$(echo "$output" | jq '.metadata | has("qualityGateName")')
+  gate_name=$(echo "$output" | jq -r '.metadata.qualityGateName')
+  [ "$has_gate_name" = "true" ]
+  [ -z "$gate_name" ]
+}
+
+@test "fetch_all_metrics: qualityProfiles present but empty when profiles fetch fails" {
+  export INCLUDE_QUALITY_PROFILES=true
+  unset INCLUDE_QUALITY_GATE_NAME
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  fetch_quality_profiles() { return 1; }
+  log_info() { :; }; log_ok() { :; }; log_warn() { :; }
+  export -f fetch_last_analysis_date fetch_quality_profiles log_info log_ok log_warn
+  export SONAR_CLOUD=false
+
+  run fetch_all_metrics
+  [ "$status" -eq 0 ]
+  has_profiles=$(echo "$output" | jq '.metadata | has("qualityProfiles")')
+  count=$(echo "$output" | jq '.metadata.qualityProfiles | length')
+  [ "$has_profiles" = "true" ]
+  [ "$count" -eq 0 ]
+}
+
+@test "fetch_all_metrics: does not fetch quality data when flags off" {
+  unset INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME
+  export _QCALL_FILE
+  _QCALL_FILE=$(mktemp)
+  _mock_basic_fetchers
+  fetch_last_analysis_date() { echo '2024-01-14T09:30:00+0000'; }
+  fetch_quality_gate_name() { echo "called" >>"$_QCALL_FILE"; echo 'X'; }
+  fetch_quality_profiles() { echo "called" >>"$_QCALL_FILE"; echo '[]'; }
+  log_info() { :; }; log_ok() { :; }
+  export -f fetch_last_analysis_date fetch_quality_gate_name fetch_quality_profiles log_info log_ok
+  export SONAR_CLOUD=false
+
+  run fetch_all_metrics
+  local calls
+  calls=$(cat "$_QCALL_FILE")
+  rm -f "$_QCALL_FILE"
+  [ "$status" -eq 0 ]
+  [ -z "$calls" ]
 }

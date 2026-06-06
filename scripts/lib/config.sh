@@ -42,6 +42,8 @@ is_allowed_key() {
     INCLUDE_RULE_DESCRIPTIONS|\
     INCLUDE_CODE_SNIPPETS|\
     SNIPPET_CONTEXT|\
+    INCLUDE_QUALITY_PROFILES|\
+    INCLUDE_QUALITY_GATE_NAME|\
     WAIT_FOR_ANALYSIS|\
     FAIL_ON_GATE)
       return 0
@@ -159,7 +161,8 @@ parse_shell_config() {
 #     - sonar (url, token, project_key, branch, organization, cloud, task_id, analysis_id)
 #     - report (formats, output_dir)
 #     - polling (interval, timeout, wait)
-#     - enrichment (include_rule_descriptions, include_code_snippets, snippet_context)
+#     - enrichment (include_rule_descriptions, include_code_snippets, snippet_context,
+#                   include_quality_profiles, include_quality_gate_name)
 #     - options (fail_on_gate, dry_run_file, notify_webhook)
 # ---------------------------------------------------------------------------
 parse_yaml_config() {
@@ -245,6 +248,8 @@ yaml_key_to_env_var() {
     enrichment.include_rule_descriptions) echo "INCLUDE_RULE_DESCRIPTIONS" ;;
     enrichment.include_code_snippets)   echo "INCLUDE_CODE_SNIPPETS" ;;
     enrichment.snippet_context)         echo "SNIPPET_CONTEXT" ;;
+    enrichment.include_quality_profiles)  echo "INCLUDE_QUALITY_PROFILES" ;;
+    enrichment.include_quality_gate_name) echo "INCLUDE_QUALITY_GATE_NAME" ;;
     options.fail_on_gate)               echo "FAIL_ON_GATE" ;;
     options.dry_run_file)               echo "DRY_RUN_FILE" ;;
     options.notify_webhook)             echo "NOTIFY_WEBHOOK" ;;

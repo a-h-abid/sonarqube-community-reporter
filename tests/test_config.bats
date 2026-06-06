@@ -29,6 +29,7 @@ setup() {
   unset SONAR_CLOUD SONAR_TASK_ID REPORT_FORMATS REPORT_OUTPUT_DIR
   unset POLL_INTERVAL POLL_TIMEOUT ANALYSIS_ID DRY_RUN_FILE NOTIFY_WEBHOOK
   unset INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT
+  unset INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME
 }
 
 # ==============================================================================
@@ -41,6 +42,16 @@ setup() {
 
 @test "is_allowed_key: accepts REPORT_FORMATS" {
   run is_allowed_key "REPORT_FORMATS"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_allowed_key: accepts INCLUDE_QUALITY_PROFILES" {
+  run is_allowed_key "INCLUDE_QUALITY_PROFILES"
+  [ "$status" -eq 0 ]
+}
+
+@test "is_allowed_key: accepts INCLUDE_QUALITY_GATE_NAME" {
+  run is_allowed_key "INCLUDE_QUALITY_GATE_NAME"
   [ "$status" -eq 0 ]
 }
 
@@ -263,6 +274,11 @@ EOF
   [ "$(yaml_key_to_env_var sonar analysis_id)" = "ANALYSIS_ID" ]
   [ "$(yaml_key_to_env_var polling wait)" = "WAIT_FOR_ANALYSIS" ]
   [ "$(yaml_key_to_env_var options fail_on_gate)" = "FAIL_ON_GATE" ]
+}
+
+@test "yaml_key_to_env_var: maps enrichment quality-metadata keys" {
+  [ "$(yaml_key_to_env_var enrichment include_quality_profiles)" = "INCLUDE_QUALITY_PROFILES" ]
+  [ "$(yaml_key_to_env_var enrichment include_quality_gate_name)" = "INCLUDE_QUALITY_GATE_NAME" ]
 }
 
 @test "load_config_file: errors when config_dir not specified" {

@@ -73,6 +73,14 @@ enrichment:
   # Lines of context shown before/after the affected lines in the code snippet.
   snippet_context: 3
 
+  # Show the Quality Profiles (rule sets, one per language) applied during
+  # analysis, in all report formats. Useful for audit trails. Set "true" to enable.
+  include_quality_profiles: false
+
+  # Show the name of the Quality Gate applied during analysis, in all report
+  # formats. Set "true" to enable.
+  include_quality_gate_name: false
+
 # --- Additional Options ------------------------------------------------------
 options:
   # Dry-run mode: skip API calls and regenerate reports from a saved JSON file

@@ -28,6 +28,8 @@ setup() {
   INCLUDE_RULE_DESCRIPTIONS=""
   INCLUDE_CODE_SNIPPETS="false"
   SNIPPET_CONTEXT="3"
+  INCLUDE_QUALITY_PROFILES="false"
+  INCLUDE_QUALITY_GATE_NAME="false"
 }
 
 @test "normalize_format: maps markdown alias to md" {
@@ -268,6 +270,27 @@ setup() {
   [ "$SNIPPET_CONTEXT" = "5" ]
 }
 
+@test "parse_args: --include-quality-profiles sets INCLUDE_QUALITY_PROFILES to true" {
+  parse_args --include-quality-profiles --project-key "p"
+  [ "$INCLUDE_QUALITY_PROFILES" = "true" ]
+}
+
+@test "parse_args: --include-quality-gate-name sets INCLUDE_QUALITY_GATE_NAME to true" {
+  parse_args --include-quality-gate-name --project-key "p"
+  [ "$INCLUDE_QUALITY_GATE_NAME" = "true" ]
+}
+
+# ===========================================================================
+# apply_defaults — quality metadata flags
+# ===========================================================================
+
+@test "apply_defaults: defaults quality metadata flags to false" {
+  unset INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME
+  apply_defaults
+  [ "$INCLUDE_QUALITY_PROFILES" = "false" ]
+  [ "$INCLUDE_QUALITY_GATE_NAME" = "false" ]
+}
+
 # ===========================================================================
 # validate_enrichment_flags
 # ===========================================================================
@@ -324,4 +347,35 @@ setup() {
   SNIPPET_CONTEXT="9999"
   validate_enrichment_flags
   [ "$SNIPPET_CONTEXT" = "50" ]
+}
+
+@test "validate_enrichment_flags: normalizes INCLUDE_QUALITY_PROFILES to true/false" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  INCLUDE_QUALITY_PROFILES="yes"
+  validate_enrichment_flags
+  [ "$INCLUDE_QUALITY_PROFILES" = "true" ]
+
+  INCLUDE_QUALITY_PROFILES="off"
+  validate_enrichment_flags
+  [ "$INCLUDE_QUALITY_PROFILES" = "false" ]
+}
+
+@test "validate_enrichment_flags: normalizes INCLUDE_QUALITY_GATE_NAME to true/false" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  INCLUDE_QUALITY_GATE_NAME="1"
+  validate_enrichment_flags
+  [ "$INCLUDE_QUALITY_GATE_NAME" = "true" ]
+}
+
+@test "validate_enrichment_flags: rejects invalid INCLUDE_QUALITY_PROFILES" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  INCLUDE_QUALITY_PROFILES="maybe"
+  run validate_enrichment_flags
+  [ "$status" -ne 0 ]
 }

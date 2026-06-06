@@ -12,6 +12,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 - **Issues Details** — Lists all open issues with severity, type, rule, file/line details, and effort
 - **Security Hotspot Details** — Lists security hotspots with rule, file/line details, risk level, and review status
 - **Optional enrichment** — Add rule descriptions ("Why is this an issue?" / "How to fix it") and affected code snippets to issues and hotspots (opt-in via `--include-rule-descriptions` / `--include-code-snippets`)
+- **Quality Profiles & Gate (audit)** — Optionally record which Quality Profiles and Quality Gate were applied during analysis, in all report formats (opt-in via `--include-quality-profiles` / `--include-quality-gate-name`)
 - **Analysis polling** — Waits for SonarQube Compute Engine to finish before fetching results
 - **Dry-run / offline mode** — Regenerate reports from a saved report data JSON file without making any API calls
 - **Webhook notifications** — Post a summary (quality gate, issue counts, report list) to any Slack, Teams, or generic incoming webhook URL after generation

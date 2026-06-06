@@ -233,6 +233,19 @@ teardown() {
   [ -d "$new_dir" ]
 }
 
+@test "generate_json_report: includes quality profiles & gate name when present" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityGateName = "Sonar way"
+      | .metadata.qualityProfiles = [{"key":"k","name":"Sonar way","language":"java","languageName":"Java"}]' \
+    "$_REPORT_DATA_FILE" > "$f"
+  run generate_json_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  [ "$(jq -r '.metadata.qualityGateName' "$filepath")" = "Sonar way" ]
+  [ "$(jq -r '.metadata.qualityProfiles[0].name' "$filepath")" = "Sonar way" ]
+}
+
 # ===========================================================================
 # generate_md_report
 # ===========================================================================
@@ -421,6 +434,56 @@ teardown() {
   grep -q "SQL injection risk explained" "$filepath"
 
   rm -f "$enriched"
+}
+
+# ===========================================================================
+# generate_md_report — quality profiles & quality gate name
+# ===========================================================================
+
+@test "generate_md_report: shows quality gate name row when present" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityGateName = "Sonar way"' "$_REPORT_DATA_FILE" > "$f"
+  run generate_md_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -qF '| **Quality Gate** | Sonar way |' "$filepath"
+}
+
+@test "generate_md_report: renders Quality Profiles section when present" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityProfiles = [
+    {"key":"k1","name":"Sonar way","language":"java","languageName":"Java"},
+    {"key":"k2","name":"Custom Python","language":"py","languageName":"Python"}
+  ]' "$_REPORT_DATA_FILE" > "$f"
+  run generate_md_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q '## Quality Profiles' "$filepath"
+  grep -qF '| Java | Sonar way |' "$filepath"
+  grep -qF '| Python | Custom Python |' "$filepath"
+}
+
+@test "generate_md_report: omits quality profiles & gate name when absent" {
+  run generate_md_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  run grep -c '## Quality Profiles' "$filepath"
+  [ "$output" = "0" ]
+  run grep -cF '**Quality Gate**' "$filepath"
+  [ "$output" = "0" ]
+}
+
+@test "generate_md_report: shows 'no profiles' note when enabled but empty" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityProfiles = []' "$_REPORT_DATA_FILE" > "$f"
+  run generate_md_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q '## Quality Profiles' "$filepath"
+  grep -q 'No quality profiles found' "$filepath"
 }
 
 # ===========================================================================
@@ -755,6 +818,82 @@ teardown() {
 }
 
 # ===========================================================================
+# generate_html_report — quality profiles & quality gate name
+# ===========================================================================
+
+@test "generate_html_report: shows quality gate name in header when present" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityGateName = "Sonar way"' "$_REPORT_DATA_FILE" > "$f"
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q 'class="header-info qg-name"' "$filepath"
+  grep -q 'Sonar way' "$filepath"
+}
+
+@test "generate_html_report: renders Quality Profiles table when present" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityProfiles = [
+    {"key":"k1","name":"Sonar way","language":"java","languageName":"Java"},
+    {"key":"k2","name":"Custom Python","language":"py","languageName":"Python"}
+  ]' "$_REPORT_DATA_FILE" > "$f"
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q '<h2>Quality Profiles</h2>' "$filepath"
+  grep -q 'class="quality-profiles-table"' "$filepath"
+  grep -q 'Custom Python' "$filepath"
+  grep -q '>Java<' "$filepath"
+  grep -q '>Python<' "$filepath"
+}
+
+@test "generate_html_report: omits quality profiles & gate name when absent (back-compat)" {
+  run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  # Assert on the rendered markup (the template keeps an HTML comment regardless).
+  run grep -c '<h2>Quality Profiles</h2>' "$filepath"
+  [ "$output" = "0" ]
+  run grep -c 'qg-name' "$filepath"
+  [ "$output" = "0" ]
+}
+
+@test "generate_html_report: shows 'no profiles' note when profiles enabled but empty" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityProfiles = []' "$_REPORT_DATA_FILE" > "$f"
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q '<h2>Quality Profiles</h2>' "$filepath"
+  grep -q 'No quality profiles found' "$filepath"
+}
+
+@test "generate_html_report: shows N/A gate name when enabled but empty" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityGateName = ""' "$_REPORT_DATA_FILE" > "$f"
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q 'qg-name.*N/A' "$filepath"
+}
+
+@test "generate_html_report: escapes HTML in profile names" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityProfiles = [
+    {"key":"k1","name":"A<b>&C","language":"java","languageName":"Java"}
+  ]' "$_REPORT_DATA_FILE" > "$f"
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q 'A&lt;b&gt;&amp;C' "$filepath"
+}
+
+# ===========================================================================
 # spreadsheet helper data
 # ===========================================================================
 
@@ -771,6 +910,41 @@ teardown() {
   # Summary sheet is KPI-only (no condition-level table rows)
   ! grep -q 'new_reliability_rating' "$summary_csv"
 
+  rm -f "$summary_csv"
+}
+
+@test "write_summary_csv: includes Quality Gate Name row when present" {
+  local f summary_csv
+  f=$(mktemp); summary_csv=$(mktemp)
+  jq '.metadata.qualityGateName = "Sonar way"' "$_REPORT_DATA_FILE" > "$f"
+  run write_summary_csv "$f" "$summary_csv"
+  [ "$status" -eq 0 ]
+  grep -qF '"Quality Gate Name","Sonar way"' "$summary_csv"
+  rm -f "$f" "$summary_csv"
+}
+
+@test "write_summary_csv: includes per-language quality profile rows when present" {
+  local f summary_csv
+  f=$(mktemp); summary_csv=$(mktemp)
+  jq '.metadata.qualityProfiles = [
+    {"key":"k1","name":"Sonar way","language":"java","languageName":"Java"},
+    {"key":"k2","name":"Custom Python","language":"py","languageName":"Python"}
+  ]' "$_REPORT_DATA_FILE" > "$f"
+  run write_summary_csv "$f" "$summary_csv"
+  [ "$status" -eq 0 ]
+  grep -qF '"Quality Profile (Java)","Sonar way"' "$summary_csv"
+  grep -qF '"Quality Profile (Python)","Custom Python"' "$summary_csv"
+  rm -f "$f" "$summary_csv"
+}
+
+@test "write_summary_csv: omits quality rows when absent" {
+  local summary_csv
+  summary_csv=$(mktemp)
+  write_summary_csv "$_REPORT_DATA_FILE" "$summary_csv"
+  run grep -c 'Quality Gate Name' "$summary_csv"
+  [ "$output" = "0" ]
+  run grep -c 'Quality Profile' "$summary_csv"
+  [ "$output" = "0" ]
   rm -f "$summary_csv"
 }
 
@@ -1117,6 +1291,24 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "${lines[-1]}" == *.pdf ]]
   [ -f "${lines[-1]}" ]
+}
+
+@test "generate_pdf_report: source HTML carries quality profiles (PDF inherits)" {
+  local f; f=$(mktemp)
+  jq '.metadata.qualityGateName = "Sonar way"
+      | .metadata.qualityProfiles = [{"key":"k","name":"Sonar way","language":"java","languageName":"Java"}]' \
+    "$_REPORT_DATA_FILE" > "$f"
+  # The PDF is rendered from the HTML report, so verify the HTML source carries
+  # the data, then confirm PDF generation consumes that HTML without error.
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  rm -f "$f"
+  [ "$status" -eq 0 ]
+  local html="${lines[-1]}"
+  grep -q 'Quality Profiles' "$html"
+  grep -q 'qg-name' "$html"
+  PATH="$_FAKE_BIN:$PATH" run generate_pdf_report "$html" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "${lines[-1]}" == *.pdf ]]
 }
 
 @test "generate_pdf_report: reports failure when wkhtmltopdf fails" {

@@ -115,6 +115,22 @@ generate_html_report() {
   local issues_table
   issues_table=$(echo "$report_data" | jq -r --arg mode "$rule_mode" -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-issues-table.jq")
 
+  # Quality gate name (audit metadata) — header row, only when the key is
+  # present. Empty value renders as "N/A"; key absent ⇒ no row at all.
+  local qg_name_row=""
+  if echo "$report_data" | jq -e '.metadata | has("qualityGateName")' >/dev/null 2>&1; then
+    local qg_name
+    qg_name=$(echo "$report_data" | jq -r '
+      (.metadata.qualityGateName // "")
+      | (if . == "" then "N/A" else . end)
+      | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")')
+    qg_name_row="<div class=\"header-info qg-name\">Quality Gate: <strong>${qg_name}</strong></div>"
+  fi
+
+  # Quality profiles (audit metadata) — section HTML, or "" when key absent.
+  local quality_profiles_section
+  quality_profiles_section=$(echo "$report_data" | jq -r -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-quality-profiles.jq")
+
   # --- Build HTML by substituting placeholders ---
   local html
   html=$(cat "$tpl_file")
@@ -187,6 +203,18 @@ generate_html_report() {
   # Replace issues details table
   printf '%s' "$issues_table" > "${tmpfile}.rep"
   awk -v ph="{{ISSUES_TABLE}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+
+  # Replace quality gate name header row (empty when the feature is disabled)
+  printf '%s' "$qg_name_row" > "${tmpfile}.rep"
+  awk -v ph="{{QUALITY_GATE_NAME_ROW}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+
+  # Replace quality profiles section (empty when the feature is disabled)
+  printf '%s' "$quality_profiles_section" > "${tmpfile}.rep"
+  awk -v ph="{{QUALITY_PROFILES_SECTION}}" -v cf="${tmpfile}.rep" \
     -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
     "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
   rm -f "${tmpfile}.rep"

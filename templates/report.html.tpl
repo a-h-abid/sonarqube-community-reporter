@@ -583,6 +583,7 @@
         Analysis ID: {{ANALYSIS_ID}} &nbsp;|&nbsp;
         <a href="{{SONAR_URL}}/dashboard?id={{PROJECT_KEY}}">Open in SonarQube →</a>
       </div>
+      {{QUALITY_GATE_NAME_ROW}}
     </div>
     <div>
       <span class="qg-badge {{QG_CLASS}}">Quality Gate: {{QG_STATUS}}</span>
@@ -592,6 +593,9 @@
   <!-- Quality Gate Conditions -->
   <h2>Quality Gate Conditions</h2>
   {{QG_CONDITIONS_TABLE}}
+
+  <!-- Quality Profiles (audit metadata; rendered only when enabled) -->
+  {{QUALITY_PROFILES_SECTION}}
 
   <!-- Key Metrics -->
   <h2>Key Metrics</h2>

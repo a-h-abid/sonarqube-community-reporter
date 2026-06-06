@@ -7,6 +7,10 @@
 ["Analysis ID", (.metadata.analysisId // "N/A")],
 ["SonarQube URL", (.metadata.sonarUrl // "N/A")],
 ["Quality Gate Status", (.qualityGate.status // "UNKNOWN")],
+(if (.metadata | has("qualityGateName"))
+ then ["Quality Gate Name", ((.metadata.qualityGateName // "") | if . == "" then "N/A" else . end)]
+ else empty end),
+((.metadata.qualityProfiles // [])[] | ["Quality Profile (" + (.languageName // .language // "?") + ")", (.name // "N/A")]),
 ["Bugs", (.measures.bugs // "0")],
 ["Vulnerabilities", (.measures.vulnerabilities // "0")],
 ["Code Smells", (.measures.code_smells // "0")],

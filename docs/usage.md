@@ -34,6 +34,12 @@ Options:
                                                     (env: INCLUDE_CODE_SNIPPETS)
   --snippet-context N    Lines of context around the affected lines (default: 3)
                                                     (env: SNIPPET_CONTEXT)
+  --include-quality-profiles
+                         Show the Quality Profiles applied during analysis
+                         (all formats).            (env: INCLUDE_QUALITY_PROFILES)
+  --include-quality-gate-name
+                         Show the name of the Quality Gate applied during
+                         analysis (all formats). (env: INCLUDE_QUALITY_GATE_NAME)
   -h, --help             Show help
 ```
 
@@ -188,6 +194,31 @@ Example:
 **Permissions.** Source snippet fetching requires the token to have *Browse* permission on the project. Missing rules or unavailable source files are skipped silently with a warning to stderr — the run never aborts on enrichment failures.
 
 **SonarQube version notes.** SonarQube 9.5+ exposes structured rule sections (`descriptionSections[]`) that cleanly separate "Why" and "How to fix"; older versions return a single `htmlDesc` and the split is heuristic.
+
+## Quality Profiles & Quality Gate (audit metadata)
+
+For audit trails, the report can record **which** Quality Gate and Quality Profiles (rule sets, one per language) were applied during analysis. Both are **opt-in** and toggled independently:
+
+| Flag (env var) | Effect | Formats |
+|---|---|---|
+| `--include-quality-profiles` (`INCLUDE_QUALITY_PROFILES`) | Adds a **Quality Profiles** table (Language → Profile) listing the profile used per language. | All formats |
+| `--include-quality-gate-name` (`INCLUDE_QUALITY_GATE_NAME`) | Shows the **name** of the Quality Gate (alongside the existing PASS/FAIL status). | All formats |
+
+Example:
+
+```bash
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 \
+  --token YOUR_TOKEN \
+  --project-key my-project \
+  --include-quality-profiles \
+  --include-quality-gate-name \
+  --formats html,pdf,md,json,csv
+```
+
+**API cost.** Each enabled flag adds one project-level API call: `/api/qualitygates/get_by_project` (gate name) and `/api/qualityprofiles/search` (profiles).
+
+**Permissions.** Both require the token to have *Browse* permission on the project. If a call fails (e.g. insufficient permission or an older server), the field is logged as a warning and rendered as `N/A` / omitted — the run never aborts.
 
 ## CSV Export
 

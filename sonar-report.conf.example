@@ -66,6 +66,14 @@ INCLUDE_CODE_SNIPPETS=false
 # Lines of context shown before/after the affected lines in the code snippet.
 SNIPPET_CONTEXT=3
 
+# Show the Quality Profiles (rule sets, one per language) applied during
+# analysis, in all report formats. Useful for audit trails. Set "true" to enable.
+INCLUDE_QUALITY_PROFILES=false
+
+# Show the name of the Quality Gate applied during analysis, in all report
+# formats. Set "true" to enable.
+INCLUDE_QUALITY_GATE_NAME=false
+
 # --- Additional Options -----------------------------------------------------
 # Analysis ID (optional — for reporting purposes)
 ANALYSIS_ID=
