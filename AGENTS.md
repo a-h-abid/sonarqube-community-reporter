@@ -1,121 +1,71 @@
 # Agents Instructions
 
-## Coding Conventions
+## Repo Map
 
-### Shell Script Standards
+- `scripts/sonar-report.sh`: main CLI, orchestration, config precedence, `--dry-run`.
+- `scripts/wait-for-analysis.sh`: standalone SonarQube CE task polling.
+- `scripts/lib/api.sh`: HTTP helpers, pagination, shared logging helpers.
+- `scripts/lib/config.sh`: config parsing and safe key allowlist (`is_allowed_key`).
+- `scripts/lib/metrics.sh`: quality gate, issues, hotspots, rules, and measures collection.
+- `scripts/lib/report-*.sh`: JSON, Markdown, HTML, CSV, PDF, XLSX, and ODS generators.
+- `scripts/lib/notify.sh`: webhook delivery.
+- `scripts/lib/rule-details.sh`: optional rule description and source snippet enrichment.
 
-- **Minimum Bash version:** Target **bash 4.4+**. The scripts run under `set -euo pipefail`, and bash
-  older than 4.4 errors on empty-array expansion (`"${arr[@]}"` when the array is empty) — bash 4.2/4.3
-  fail at runtime with `unbound variable`; `declare -g` additionally requires 4.2. `scripts/sonar-report.sh`
-  enforces this with a `BASH_VERSINFO` guard. Do **not** introduce bash 5.0+-only features (e.g.
-  `EPOCHSECONDS`, `SRANDOM`, `${ …; }` value/function substitution, `${var@U/@L/@K}` transforms) so the
-  4.4 floor holds. Smoke-test shell changes on `bash:4.4` (e.g. the `--dry-run` path) when touching script logic.
-- **Shebang:** Always use `#!/usr/bin/env bash`
-- **Strict mode:** Always set `set -euo pipefail` at the top of every script
-- **Quoting:** Always double-quote variables: `"$var"`, `"${var}"`
+## Shell Patterns
 
-### Source Guard Pattern
-
-Library scripts in `scripts/lib/` use a source guard to prevent redundant re-sourcing:
+- Target Bash 4.4+. `scripts/sonar-report.sh` enforces this; avoid Bash 5+ features.
+- Every script uses `#!/usr/bin/env bash`, `set -euo pipefail`, and double-quoted variables.
+- Function names use `snake_case`; function-scoped variables use `local`.
+- Environment variables and constants are `UPPERCASE`; sourced-script path variables are prefixed, such as `_METRICS_SCRIPT_DIR`.
+- Put `# shellcheck source=...` before every `source` command.
+- Library files in `scripts/lib/` must use a unique source guard:
 
 ```bash
 [[ -n "${_API_SH_LOADED:-}" ]] && return 0
 _API_SH_LOADED=1
 ```
 
-Each lib file must have its own unique guard variable (e.g., `_API_SH_LOADED`, `_METRICS_SH_LOADED`).
+- Functions return `1` on failure; only `main()` should `exit`.
+- Validate required inputs early and chain critical commands with `|| return 1` or `|| exit 1`.
+- Use `log_info`, `log_ok`, `log_warn`, and `log_error` from `api.sh`; do not use bare `echo` for status messages.
+- Create temp files under the project `tmp/` directory, never outside the repo, and clean them with traps such as `trap 'rm -f "$tmpfile"' RETURN`.
 
-### Variable Naming
+## Validation
 
-- **UPPERCASE** for environment variables and configuration constants (e.g., `SONAR_URL`, `REPORT_FORMATS`)
-- **Prefixed `_SCRIPT_DIR` variables** to avoid collisions when scripts are sourced together (e.g., `_METRICS_SCRIPT_DIR`, `_REPORT_HTML_SCRIPT_DIR`)
-- **`local`** keyword for all function-scoped variables
-
-### Functions
-
-- Use `snake_case` for function names
-- Use **`# shellcheck source=`** directives before every `source` command
-- Clean up temporary files with `trap 'rm -f "$tmpfile"' RETURN`
-
-### Logging
-
-Use the shared logging helpers from `scripts/lib/api.sh`:
-
-- `log_info` — informational messages (cyan)
-- `log_ok` — success messages (green)
-- `log_warn` — warnings (yellow)
-- `log_error` — errors (red, stderr)
-
-Do **not** use bare `echo` for status messages — always use the appropriate log helper.
-
-### Error Handling
-
-- Functions should `return 1` on failure (not `exit 1`), except in `main()`
-- Validate required parameters early and provide clear error messages
-- Use `|| return 1` or `|| exit 1` after critical commands
-
-
-## Linting
-
-Always run [ShellCheck](https://www.shellcheck.net/) to lint all shell scripts, specially after any changes made:
+Run ShellCheck after shell changes:
 
 ```bash
 shellcheck scripts/sonar-report.sh scripts/wait-for-analysis.sh scripts/lib/*.sh
 ```
 
-## Testing
-
-Always run the tests for code changes, all of them must pass.
+Run all tests after code changes:
 
 ```bash
 bash tests/run_tests.sh
 ```
 
-Both `run_tests.sh` and `run_coverage.sh` parallelize across all available cores
-by default (auto-detected via `nproc`), which requires GNU `parallel` to be
-installed (`sudo apt-get install -y parallel`); without it they fall back to
-sequential. Override the job count with `BATS_JOBS` — use `BATS_JOBS=1` for a
-deterministic, sequential run when debugging a single test.
+Use sequential mode when debugging order-sensitive failures:
 
 ```bash
-BATS_JOBS=1 bash tests/run_tests.sh   # sequential, for debugging
+BATS_JOBS=1 bash tests/run_tests.sh
 ```
 
-New tests must stay **parallel-safe**: isolate all mutable state in `setup()`
-via `mktemp`/`mktemp -d`, never use fixed temp paths or ports, and don't depend
-on execution order across tests — consistent with the existing test pattern.
-
-Run Code Coverage, target minimum 92% coverage (aim for ~95%). CI enforces the 92% gate.
+Run coverage when behavior or report generation changes; CI enforces 92% minimum:
 
 ```bash
 bash tests/run_coverage.sh --min-coverage 92
 ```
 
-### Coverage conventions
+Tests must be parallel-safe: isolate mutable state in `setup()` with unique `mktemp` paths or ports, and never depend on test order. Integration tests use `--dry-run` plus PATH sandboxing for fake `wkhtmltopdf`, `xvfb-run`, and spreadsheet tools.
 
-- **Embedded `jq`/`awk`/`sed` programs and kcov:** kcov cannot mark individual
-  physical lines inside a multi-line single-quoted program (e.g.
-  `var=$(echo "$x" | jq '<newline>…multi-line…<newline>')`) as hit, even though
-  they execute. Two patterns keep coverage honest:
-  - **Large / reusable report-generator programs** live in external files under
-    `scripts/lib/jq/*.jq` and `scripts/lib/awk/*.awk`, loaded with `jq -f` /
-    `awk -f`. kcov does not instrument these, and they ship via the Dockerfile's
-    `COPY scripts/`.
-  - **Smaller embedded programs** (in `metrics.sh`, `rule-details.sh`,
-    `notify.sh`, `report-pdf.sh`) are wrapped in `# kcov-skip-start` …
-    `# kcov-skip-end` marker comments. `tests/run_coverage.sh` passes
-    `--exclude-region='kcov-skip-start:kcov-skip-end'` on **both** the per-file
-    `kcov` runs and the `kcov --merge` step (the flag is required on the merge
-    too, or the regions get re-included).
-- **`main()` and the entrypoint** are exercised end-to-end in
-  `tests/test_integration.bats` via `--dry-run` and mocked collaborators; the PDF
-  and spreadsheet tools are faked through a PATH sandbox so tests stay
-  deterministic and fast.
+## Project Constraints
 
-## Important Notes
-
-- Never commit secrets or tokens — use environment variables or `.env` files (`.env` is gitignored)
-- The `reports/` directory is gitignored — only `.gitkeep` is tracked
-- PDF generation depends on `wkhtmltopdf` and `xvfb`; always handle the case where they are unavailable
-- The HTML report uses `templates/report.html.tpl` as its template — keep the template and generator in sync
-- For any temporary files, use the `tmp/` directory in this project root, do not go output this project directory.
+- Config precedence is CLI flags, environment variables, config file (`.sonar-report.yml` or `sonar-report.conf`), then defaults.
+- Never commit secrets or tokens; use environment variables or `.env` files (`.env` is gitignored).
+- `reports/` is gitignored except `.gitkeep`; generated reports do not belong in commits.
+- Keep `templates/report.html.tpl` and `scripts/lib/report-html.sh` in sync.
+- PDF generation depends on `wkhtmltopdf` and `xvfb`; spreadsheet generation depends on external converters. Handle missing tools gracefully.
+- `ssconvert --merge-to` names XLSX/ODS sheets from CSV filenames, including the `.csv` suffix.
+- Rule enrichment (`--include-rule-descriptions`) is optional and must degrade cleanly on API errors or insufficient permissions.
+- Put large reusable jq/awk programs in `scripts/lib/jq/` or `scripts/lib/awk/`; wrap smaller embedded programs with `# kcov-skip-start` / `# kcov-skip-end` when coverage would be misleading.
+- Keep awk portable for mawk: prefer `length()` checks over interval quantifiers like `{32,128}`.
