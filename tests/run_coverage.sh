@@ -80,6 +80,18 @@ if [[ -n "$MIN_COVERAGE" ]] && ! [[ "$MIN_COVERAGE" =~ ^[0-9]+([.][0-9]+)?$ ]]; 
   exit 1
 fi
 
+# Parallelism — kcov correctly traces bats' parallel children, so each per-file
+# kcov run gets all cores for within-file parallelism (the kcov loop itself stays
+# sequential). Override with BATS_JOBS (e.g. BATS_JOBS=1 for sequential runs).
+# bats errors if --jobs is passed without GNU parallel/rush, so guard for it.
+JOBS="${BATS_JOBS:-$(nproc 2>/dev/null || echo 4)}"
+BATS_PARALLEL=()
+if [[ "$JOBS" -gt 1 ]] && { command -v parallel &>/dev/null || command -v rush &>/dev/null; }; then
+  BATS_PARALLEL=(--jobs "$JOBS")
+elif [[ "$JOBS" -gt 1 ]]; then
+  echo "[WARN] GNU 'parallel' not found — running tests sequentially. Install 'parallel' to speed this up." >&2
+fi
+
 RAW_DIR="${COVERAGE_DIR}/raw"
 rm -rf "${COVERAGE_DIR}"
 mkdir -p "${RAW_DIR}"
@@ -97,7 +109,7 @@ for test_file in "${TEST_FILES[@]}"; do
     --exclude-pattern="${REPO_ROOT}/tests,${REPO_ROOT}/reports" \
     --exclude-region='kcov-skip-start:kcov-skip-end' \
     "${RAW_DIR}/${test_name}" \
-    bats "${test_file}"
+    bats "${BATS_PARALLEL[@]}" "${test_file}"
 done
 
 echo ""

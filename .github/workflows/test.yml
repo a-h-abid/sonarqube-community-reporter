@@ -44,7 +44,7 @@ jobs:
       - name: Install runtime dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y bats jq libcurl4 libdw1 libelf1 libbinutils
+          sudo apt-get install -y bats jq parallel libcurl4 libdw1 libelf1 libbinutils
 
       - name: Cache kcov
         id: cache-kcov

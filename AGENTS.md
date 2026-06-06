@@ -65,6 +65,20 @@ Always run the tests for code changes, all of them must pass.
 bash tests/run_tests.sh
 ```
 
+Both `run_tests.sh` and `run_coverage.sh` parallelize across all available cores
+by default (auto-detected via `nproc`), which requires GNU `parallel` to be
+installed (`sudo apt-get install -y parallel`); without it they fall back to
+sequential. Override the job count with `BATS_JOBS` — use `BATS_JOBS=1` for a
+deterministic, sequential run when debugging a single test.
+
+```bash
+BATS_JOBS=1 bash tests/run_tests.sh   # sequential, for debugging
+```
+
+New tests must stay **parallel-safe**: isolate all mutable state in `setup()`
+via `mktemp`/`mktemp -d`, never use fixed temp paths or ports, and don't depend
+on execution order across tests — consistent with the existing test pattern.
+
 Run Code Coverage, target minimum 92% coverage (aim for ~95%). CI enforces the 92% gate.
 
 ```bash
