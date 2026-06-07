@@ -56,13 +56,14 @@ log_error() { echo -e "${RED}[ERROR]${NC} $*" >&2; }
 # ---------------------------------------------------------------------------
 project_tmp_dir() {
   local preferred_tmp_dir="${SONAR_REPORT_TMP_DIR:-${_API_PROJECT_ROOT}/tmp}"
-  if mkdir -p "$preferred_tmp_dir" 2>/dev/null; then
+  if mkdir -p "$preferred_tmp_dir" 2>/dev/null && [[ -w "$preferred_tmp_dir" ]]; then
     echo "$preferred_tmp_dir"
     return 0
   fi
 
   local fallback_tmp_dir="${TMPDIR:-/tmp}/sonar-report"
   mkdir -p "$fallback_tmp_dir" || return 1
+  [[ -w "$fallback_tmp_dir" ]] || return 1
   echo "$fallback_tmp_dir"
 }
 
