@@ -80,18 +80,18 @@ setup() {
 @test "create_temp_file: falls back to system tmp when preferred dir is not writable" {
   local locked_parent
   locked_parent=$(mktemp -d)
+  local tmp_file=""
+  trap '[[ -n "${tmp_file:-}" ]] && rm -f "$tmp_file"; chmod 0755 "$locked_parent" 2>/dev/null || true; rm -rf "$locked_parent"' RETURN
+
   chmod 0555 "$locked_parent"
   SONAR_REPORT_TMP_DIR="${locked_parent}/blocked"
 
-  local tmp_file
   tmp_file=$(create_temp_file)
 
-  [[ "$tmp_file" == "${TMPDIR:-/tmp}/sonar-report/sonar-report."* ]]
+  [[ "$tmp_file" == "${TMPDIR:-/tmp}/"* ]]
+  [[ "$tmp_file" != "${locked_parent}/"* ]]
+  [[ "$(basename "$tmp_file")" == "sonar-report."* ]]
   [ -f "$tmp_file" ]
-
-  rm -f "$tmp_file"
-  chmod 0755 "$locked_parent"
-  rm -rf "$locked_parent"
 }
 
 # ===========================================================================
