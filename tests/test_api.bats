@@ -81,13 +81,19 @@ setup() {
   local locked_parent
   locked_parent=$(mktemp -d)
   local tmp_file=""
-  trap '[[ -n "${tmp_file:-}" ]] && rm -f "$tmp_file"; chmod 0755 "$locked_parent" 2>/dev/null || true; rm -rf "$locked_parent"' RETURN
+  cleanup_tmp_fallback_test() {
+    [[ -n "${tmp_file:-}" ]] && rm -f "$tmp_file"
+    chmod 0755 "$locked_parent" 2>/dev/null || true
+    rm -rf "$locked_parent"
+  }
+  trap cleanup_tmp_fallback_test RETURN
 
   chmod 0555 "$locked_parent"
   SONAR_REPORT_TMP_DIR="${locked_parent}/blocked"
 
   tmp_file=$(create_temp_file)
-  local system_tmp_root="${TMPDIR:-/tmp}"
+  local system_tmp_root
+  system_tmp_root="${TMPDIR:-/tmp}"
   system_tmp_root="${system_tmp_root%/}"
 
   [[ "$tmp_file" == "${system_tmp_root}/"* ]]
