@@ -282,6 +282,17 @@ $(echo "$report_data" | jq -r --arg envMode "${INCLUDE_RULE_DESCRIPTIONS:-}" '
 
 ## Issues Details
 
+$(echo "$report_data" | jq -r '
+  if (.metadata.filtersApplied // null) != null then
+    .metadata.filtersApplied as $f |
+    "> ⚠️ **Filters applied:** " +
+    ([ (if ($f.severityThreshold // "") != "" then "severity ≥ " + $f.severityThreshold else empty end),
+       (if (($f.issueTypes // []) | length) > 0 then "types " + ($f.issueTypes | join(", ")) else empty end),
+       (if ($f.maxIssues // null) != null then "max " + ($f.maxIssues | tostring) else empty end) ]
+     | join("; ")) +
+    " — showing " + (($f.issuesShown // 0) | tostring) + " of " + (($f.issuesBeforeFilter // 0) | tostring) +
+    " issues. Summary counts above reflect the full project.\n"
+  else empty end')
 $(echo "$report_data" | jq -r --arg envMode "${INCLUDE_RULE_DESCRIPTIONS:-}" '
   (.metadata.enrichment.ruleDescriptions // $envMode // "") as $mode |
   def escape_md_text:

@@ -81,6 +81,23 @@ enrichment:
   # formats. Set "true" to enable.
   include_quality_gate_name: false
 
+# --- Issue Display Filters ---------------------------------------------------
+# Limit which issues are SHOWN in the reports without changing what is fetched.
+# Summary counts always reflect the full project; only the detail lists shrink.
+# Hotspots are not affected by these filters.
+filtering:
+  # Show only issues at this severity or higher: BLOCKER, CRITICAL, MAJOR,
+  # MINOR, INFO. Leave empty to show all severities.
+  severity_threshold: ""
+
+  # Show only these comma-separated issue types: BUG, VULNERABILITY, CODE_SMELL.
+  # Leave empty to show all types.
+  issue_types: ""
+
+  # Show at most this many issues (highest severity kept), applied after the
+  # severity/type filters. Leave empty for no limit.
+  max_issues: ""
+
 # --- Additional Options ------------------------------------------------------
 options:
   # Dry-run mode: skip API calls and regenerate reports from a saved JSON file

@@ -160,7 +160,9 @@ def hotspot_secsev:
           ({ sonarUrl: $sonarUrl, sonarCloud: $sonarCloud }
            + (if $analysisId != ""   then { sonarAnalysisId: $analysisId } else {} end)
            + (if $branch != ""       then { branch: $branch } else {} end)
-           + (if $organization != "" then { organization: $organization } else {} end)),
+           + (if $organization != "" then { organization: $organization } else {} end)
+           + (if ($root.metadata.filtersApplied // null) != null
+              then { filtersApplied: $root.metadata.filtersApplied } else {} end)),
         results: $results
       }
     ]

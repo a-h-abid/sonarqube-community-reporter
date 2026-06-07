@@ -29,6 +29,16 @@
 ["New Code Smells", (.measures.new_code_smells // "N/A")],
 ["New Coverage (%)", (.measures.new_coverage // "N/A")],
 ["New Duplicated Lines Density (%)", (.measures.new_duplicated_lines_density // "N/A")],
+(if (.metadata.filtersApplied // null) != null
+ then ["Filters Applied",
+       (.metadata.filtersApplied as $f
+        | ([ (if ($f.severityThreshold // "") != "" then "severity>=" + $f.severityThreshold else empty end),
+             (if (($f.issueTypes // []) | length) > 0 then "types " + ($f.issueTypes | join("/")) else empty end),
+             (if ($f.maxIssues // null) != null then "max " + ($f.maxIssues | tostring) else empty end) ]
+           | join("; "))
+          + " - showing " + (($f.issuesShown // 0) | tostring) + " of " + (($f.issuesBeforeFilter // 0) | tostring)
+          + " issues (summary reflects full project)")]
+ else empty end),
 ["Total Issues", (.issuesSummary.total // 0 | tostring)],
 ["Hotspots Total", (.hotspotsSummary.total // 0 | tostring)],
 ["Hotspots To Review", (.hotspotsSummary.toReview // 0 | tostring)],

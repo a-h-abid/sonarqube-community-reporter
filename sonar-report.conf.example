@@ -74,6 +74,23 @@ INCLUDE_QUALITY_PROFILES=false
 # formats. Set "true" to enable.
 INCLUDE_QUALITY_GATE_NAME=false
 
+# --- Issue Display Filters --------------------------------------------------
+# Limit which issues are SHOWN in the reports without changing what is fetched.
+# Summary counts always reflect the full project; only the detail lists shrink.
+# Hotspots are not affected by these filters.
+
+# Show only issues at this severity or higher: BLOCKER, CRITICAL, MAJOR, MINOR,
+# INFO. Leave empty to show all severities.
+SEVERITY_THRESHOLD=
+
+# Show only these comma-separated issue types: BUG, VULNERABILITY, CODE_SMELL.
+# Leave empty to show all types.
+ISSUE_TYPES=
+
+# Show at most this many issues (highest severity kept), applied after the
+# severity/type filters. Leave empty for no limit.
+MAX_ISSUES=
+
 # --- Additional Options -----------------------------------------------------
 # Analysis ID (optional — for reporting purposes)
 ANALYSIS_ID=

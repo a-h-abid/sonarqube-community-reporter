@@ -131,6 +131,21 @@ generate_html_report() {
   local quality_profiles_section
   quality_profiles_section=$(echo "$report_data" | jq -r -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-quality-profiles.jq")
 
+  # Filters-applied note — rendered only when display filters are active.
+  local filters_note
+  filters_note=$(echo "$report_data" | jq -r '
+    def esc: gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+    if (.metadata.filtersApplied // null) != null then
+      .metadata.filtersApplied as $f |
+      "<div class=\"filters-note\">⚠ Filters applied: " +
+      (([ (if ($f.severityThreshold // "") != "" then "severity ≥ " + $f.severityThreshold else empty end),
+          (if (($f.issueTypes // []) | length) > 0 then "types " + ($f.issueTypes | join(", ")) else empty end),
+          (if ($f.maxIssues // null) != null then "max " + ($f.maxIssues | tostring) else empty end) ]
+        | join("; ")) | esc) +
+      " — showing " + (($f.issuesShown // 0) | tostring) + " of " + (($f.issuesBeforeFilter // 0) | tostring) +
+      " issues. Summary counts reflect the full project.</div>"
+    else "" end')
+
   # --- Build HTML by substituting placeholders ---
   local html
   html=$(cat "$tpl_file")
@@ -215,6 +230,12 @@ generate_html_report() {
   # Replace quality profiles section (empty when the feature is disabled)
   printf '%s' "$quality_profiles_section" > "${tmpfile}.rep"
   awk -v ph="{{QUALITY_PROFILES_SECTION}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+
+  # Replace filters-applied note (empty when no display filters are active)
+  printf '%s' "$filters_note" > "${tmpfile}.rep"
+  awk -v ph="{{FILTERS_NOTE}}" -v cf="${tmpfile}.rep" \
     -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
     "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
   rm -f "${tmpfile}.rep"

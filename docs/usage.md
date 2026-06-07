@@ -40,6 +40,13 @@ Options:
   --include-quality-gate-name
                          Show the name of the Quality Gate applied during
                          analysis (all formats). (env: INCLUDE_QUALITY_GATE_NAME)
+  --severity-threshold SEV
+                         Show only issues at this severity or higher
+                         (BLOCKER,CRITICAL,MAJOR,MINOR,INFO). (env: SEVERITY_THRESHOLD)
+  --issue-types TYPES    Show only these comma-separated issue types
+                         (BUG,VULNERABILITY,CODE_SMELL). (env: ISSUE_TYPES)
+  --max-issues N         Show at most N issues (highest severity kept), applied
+                         after severity/type filters. (env: MAX_ISSUES)
   -h, --help             Show help
 ```
 
@@ -219,6 +226,31 @@ Example:
 **API cost.** Each enabled flag adds one project-level API call: `/api/qualitygates/get_by_project` (gate name) and `/api/qualityprofiles/search` (profiles).
 
 **Permissions.** Both require the token to have *Browse* permission on the project. If a call fails (e.g. insufficient permission or an older server), the field is logged as a warning and rendered as `N/A` / omitted — the run never aborts.
+
+## Issue Display Filters
+
+For large projects the detailed issue list can be noisy. These flags **limit which issues are shown** in every report format without changing what is fetched from SonarQube. They compose in the order severity → type → cap:
+
+| Flag (env var) | Effect | Formats |
+|---|---|---|
+| `--severity-threshold SEV` (`SEVERITY_THRESHOLD`) | Keep only issues at `SEV` or higher (rank `BLOCKER > CRITICAL > MAJOR > MINOR > INFO`). | All formats |
+| `--issue-types TYPES` (`ISSUE_TYPES`) | Keep only the comma-separated types (`BUG`, `VULNERABILITY`, `CODE_SMELL`). | All formats |
+| `--max-issues N` (`MAX_ISSUES`) | Keep at most `N` issues, applied after the above filters. Issues are severity-sorted, so the highest-severity issues are kept. | All formats |
+
+Example — show only the 10 most severe bugs and vulnerabilities at MAJOR or above:
+
+```bash
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 \
+  --token YOUR_TOKEN \
+  --project-key my-project \
+  --severity-threshold MAJOR \
+  --issue-types BUG,VULNERABILITY \
+  --max-issues 10 \
+  --formats html,pdf,md,json,csv,sarif
+```
+
+**Scope.** Filters apply to issues only — **security hotspots are never filtered** (they have no severity/type). Summary counts (totals by type and severity) always reflect the **full project**; only the detail lists shrink. When any filter is active, every format renders a "filters applied" note so readers know the detail is a subset, and the SARIF run records a machine-readable `filtersApplied` property.
 
 ## CSV Export
 

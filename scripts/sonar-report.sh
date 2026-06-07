@@ -47,6 +47,17 @@
 #                          Show the name of the Quality Gate applied during
 #                          analysis, in all report formats.
 #                                                       (env: INCLUDE_QUALITY_GATE_NAME)
+#   --severity-threshold SEV
+#                          Show only issues at this severity or higher
+#                          (BLOCKER, CRITICAL, MAJOR, MINOR, INFO). Limits what is
+#                          shown in every format; summary counts stay full.
+#                                                       (env: SEVERITY_THRESHOLD)
+#   --issue-types TYPES    Show only these comma-separated issue types
+#                          (BUG, VULNERABILITY, CODE_SMELL).
+#                                                       (env: ISSUE_TYPES)
+#   --max-issues N         Show at most N issues (highest severity kept), applied
+#                          after the severity/type filters.
+#                                                       (env: MAX_ISSUES)
 #   --config FILE          Load configuration from FILE (default: auto-detect
 #                          .sonar-report.yml or sonar-report.conf)
 #   -h, --help             Show this help
@@ -101,6 +112,8 @@ source "${_MAIN_SCRIPT_DIR}/lib/report-ods.sh"
 source "${_MAIN_SCRIPT_DIR}/lib/report-csv.sh"
 # shellcheck source=scripts/lib/report-sarif.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-sarif.sh"
+# shellcheck source=scripts/lib/filter.sh
+source "${_MAIN_SCRIPT_DIR}/lib/filter.sh"
 # shellcheck source=scripts/lib/notify.sh
 source "${_MAIN_SCRIPT_DIR}/lib/notify.sh"
 # shellcheck source=scripts/wait-for-analysis.sh
@@ -116,6 +129,7 @@ for _var in SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_TASK_ID \
             POLL_INTERVAL POLL_TIMEOUT ANALYSIS_ID DRY_RUN_FILE NOTIFY_WEBHOOK \
             INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT \
             INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME \
+            SEVERITY_THRESHOLD ISSUE_TYPES MAX_ISSUES \
             WAIT_FOR_ANALYSIS FAIL_ON_GATE; do
   if [[ -n "${!_var:-}" ]]; then
     _ENV_SNAPSHOT_VARS="${_ENV_SNAPSHOT_VARS} ${_var}"
@@ -150,6 +164,9 @@ apply_defaults() {
   [[ -z "${SNIPPET_CONTEXT:-}" ]]           && SNIPPET_CONTEXT="3"
   [[ -z "${INCLUDE_QUALITY_PROFILES:-}" ]]  && INCLUDE_QUALITY_PROFILES="false"
   [[ -z "${INCLUDE_QUALITY_GATE_NAME:-}" ]] && INCLUDE_QUALITY_GATE_NAME="false"
+  [[ -z "${SEVERITY_THRESHOLD:-}" ]]        && SEVERITY_THRESHOLD=""
+  [[ -z "${ISSUE_TYPES:-}" ]]               && ISSUE_TYPES=""
+  [[ -z "${MAX_ISSUES:-}" ]]                && MAX_ISSUES=""
   [[ -z "${WAIT_FOR_ANALYSIS:-}" ]]         && WAIT_FOR_ANALYSIS="false"
   [[ -z "${FAIL_ON_GATE:-}" ]]              && FAIL_ON_GATE="false"
 
@@ -196,6 +213,9 @@ parse_args() {
         INCLUDE_QUALITY_PROFILES=true;    shift ;;
       --include-quality-gate-name)
         INCLUDE_QUALITY_GATE_NAME=true;   shift ;;
+      --severity-threshold) SEVERITY_THRESHOLD="$2"; shift 2 ;;
+      --issue-types)        ISSUE_TYPES="$2";        shift 2 ;;
+      --max-issues)         MAX_ISSUES="$2";         shift 2 ;;
       -h|--help)         show_help ;;
       *)
         log_error "Unknown option: $1"
@@ -277,6 +297,53 @@ validate_enrichment_flags() {
       return 1
       ;;
   esac
+}
+
+# ---------------------------------------------------------------------------
+# validate_filter_flags — Normalize and validate the issue-display filters
+#   (SEVERITY_THRESHOLD, ISSUE_TYPES, MAX_ISSUES). Uppercases recognized values
+#   and rejects unknown ones. Returns 1 on invalid input.
+# ---------------------------------------------------------------------------
+validate_filter_flags() {
+  # Normalize + validate SEVERITY_THRESHOLD
+  if [[ -n "${SEVERITY_THRESHOLD:-}" ]]; then
+    SEVERITY_THRESHOLD="${SEVERITY_THRESHOLD^^}"
+    case "$SEVERITY_THRESHOLD" in
+      BLOCKER|CRITICAL|MAJOR|MINOR|INFO) : ;;
+      *)
+        log_error "Invalid --severity-threshold: '${SEVERITY_THRESHOLD}' (expected BLOCKER, CRITICAL, MAJOR, MINOR, or INFO)"
+        return 1
+        ;;
+    esac
+  fi
+
+  # Normalize + validate ISSUE_TYPES (comma-separated whitelist)
+  if [[ -n "${ISSUE_TYPES:-}" ]]; then
+    local _raw_types=() _normalized_types=() _t
+    IFS=',' read -ra _raw_types <<< "${ISSUE_TYPES^^}"
+    for _t in "${_raw_types[@]}"; do
+      _t="${_t//[[:space:]]/}"
+      [[ -z "$_t" ]] && continue
+      case "$_t" in
+        BUG|VULNERABILITY|CODE_SMELL) _normalized_types+=("$_t") ;;
+        *)
+          log_error "Invalid --issue-types value: '${_t}' (expected BUG, VULNERABILITY, or CODE_SMELL)"
+          return 1
+          ;;
+      esac
+    done
+    ISSUE_TYPES=$(IFS=','; echo "${_normalized_types[*]:-}")
+  fi
+
+  # Validate MAX_ISSUES (positive integer)
+  if [[ -n "${MAX_ISSUES:-}" ]]; then
+    if ! [[ "$MAX_ISSUES" =~ ^[1-9][0-9]*$ ]]; then
+      log_error "--max-issues must be a positive integer (got '${MAX_ISSUES}')"
+      return 1
+    fi
+  fi
+
+  return 0
 }
 
 validate_report_formats() {
@@ -381,6 +448,10 @@ validate_params() {
     errors=$((errors + 1))
   fi
 
+  if ! validate_filter_flags; then
+    errors=$((errors + 1))
+  fi
+
   if [[ "$errors" -gt 0 ]]; then
     echo ""
     log_info "Run with --help for usage information"
@@ -471,7 +542,13 @@ main() {
 
   # --- Step 3: Fetch all metrics (or reuse dry-run file) ---
   local report_data_file
+  # Temp files we own and must clean up. The dry-run input file is never owned,
+  # so it is never deleted; the filter step (below) may create a second temp.
   local _owned_report_data_file=""
+  local _filtered_report_data_file=""
+  trap '[[ -n "${_owned_report_data_file:-}" ]] && rm -f "$_owned_report_data_file"
+        [[ -n "${_filtered_report_data_file:-}" ]] && rm -f "$_filtered_report_data_file"
+        true' EXIT
 
   if [[ -n "$DRY_RUN_FILE" ]]; then
     report_data_file="$DRY_RUN_FILE"
@@ -485,14 +562,34 @@ main() {
     # variables and passing it as function arguments (which degrades with
     # large issue sets).
     report_data_file=$(create_temp_file)
-    _owned_report_data_file="yes"
-    trap '[[ -n "$_owned_report_data_file" ]] && rm -f "$report_data_file"' EXIT
+    _owned_report_data_file="$report_data_file"
 
     fetch_all_metrics > "$report_data_file" || {
       log_error "Failed to collect analysis data"
-      rm -f "$report_data_file"
       exit 1
     }
+    echo ""
+  fi
+
+  # --- Step 3.5: Apply display filters (issues only) ---
+  # Limits what is SHOWN without changing what was fetched. Hotspots and summary
+  # counts are untouched; the original (unfiltered) issue list is replaced for
+  # all downstream generators by a filtered copy.
+  if [[ -n "${SEVERITY_THRESHOLD:-}" ]] || [[ -n "${ISSUE_TYPES:-}" ]] \
+     || [[ -n "${MAX_ISSUES:-}" ]]; then
+    local filtered_file
+    filtered_file=$(apply_issue_filters "$report_data_file") || {
+      log_error "Failed to apply issue filters"
+      exit 1
+    }
+    if [[ "$filtered_file" != "$report_data_file" ]]; then
+      _filtered_report_data_file="$filtered_file"
+      report_data_file="$filtered_file"
+    fi
+    local _shown _before
+    _shown=$(jq -r '.metadata.filtersApplied.issuesShown // 0' "$report_data_file")
+    _before=$(jq -r '.metadata.filtersApplied.issuesBeforeFilter // 0' "$report_data_file")
+    log_info "Filters applied — showing ${_shown} of ${_before} issues (summary counts reflect the full project)"
     echo ""
   fi
 

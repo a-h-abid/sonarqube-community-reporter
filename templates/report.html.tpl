@@ -402,6 +402,17 @@
     .resolution-safe { background: #e0f7fa; color: #00695c; }
     .resolution-acknowledged { background: #fff3e0; color: #8a4500; }
 
+    /* Filters-applied note */
+    .filters-note {
+      background: #fff8e1;
+      border: 1px solid #ffe082;
+      border-radius: 6px;
+      padding: 10px 14px;
+      margin: 8px 0 16px;
+      font-size: 0.9rem;
+      color: #7c5700;
+    }
+
     /* Footer */
     .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--color-border); font-size: 0.8rem; color: var(--color-muted); text-align: center; }
 
@@ -741,6 +752,7 @@
 
   <!-- Issues Details -->
   <h2>Issues Details</h2>
+  {{FILTERS_NOTE}}
   {{ISSUES_TABLE}}
 
   <!-- Footer -->

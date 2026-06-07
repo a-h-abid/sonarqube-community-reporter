@@ -44,6 +44,9 @@ is_allowed_key() {
     SNIPPET_CONTEXT|\
     INCLUDE_QUALITY_PROFILES|\
     INCLUDE_QUALITY_GATE_NAME|\
+    SEVERITY_THRESHOLD|\
+    ISSUE_TYPES|\
+    MAX_ISSUES|\
     WAIT_FOR_ANALYSIS|\
     FAIL_ON_GATE)
       return 0
@@ -163,6 +166,7 @@ parse_shell_config() {
 #     - polling (interval, timeout, wait)
 #     - enrichment (include_rule_descriptions, include_code_snippets, snippet_context,
 #                   include_quality_profiles, include_quality_gate_name)
+#     - filtering (severity_threshold, issue_types, max_issues)
 #     - options (fail_on_gate, dry_run_file, notify_webhook)
 # ---------------------------------------------------------------------------
 parse_yaml_config() {
@@ -250,6 +254,9 @@ yaml_key_to_env_var() {
     enrichment.snippet_context)         echo "SNIPPET_CONTEXT" ;;
     enrichment.include_quality_profiles)  echo "INCLUDE_QUALITY_PROFILES" ;;
     enrichment.include_quality_gate_name) echo "INCLUDE_QUALITY_GATE_NAME" ;;
+    filtering.severity_threshold)       echo "SEVERITY_THRESHOLD" ;;
+    filtering.issue_types)              echo "ISSUE_TYPES" ;;
+    filtering.max_issues)               echo "MAX_ISSUES" ;;
     options.fail_on_gate)               echo "FAIL_ON_GATE" ;;
     options.dry_run_file)               echo "DRY_RUN_FILE" ;;
     options.notify_webhook)             echo "NOTIFY_WEBHOOK" ;;
