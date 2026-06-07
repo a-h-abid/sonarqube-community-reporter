@@ -28,7 +28,7 @@ _API_SH_LOADED=1
 - Functions return `1` on failure; only `main()` should `exit`.
 - Validate required inputs early and chain critical commands with `|| return 1` or `|| exit 1`.
 - Use `log_info`, `log_ok`, `log_warn`, and `log_error` from `api.sh`; do not use bare `echo` for status messages.
-- Create temp files under the project `tmp/` directory, never outside the repo, and clean them with traps such as `trap 'rm -f "$tmpfile"' RETURN`.
+- Create temp files under the project `tmp/` directory when it is available; if the configured/project temp directory cannot be created or is not writable (for example on a read-only mount), fall back to `${TMPDIR:-/tmp}/sonar-report`, and clean temp files with traps such as `trap 'rm -f "$tmpfile"' RETURN`.
 
 ## Validation
 
