@@ -19,6 +19,7 @@ setup() {
 
   REQUESTED_FORMATS=()
   REPORT_FORMATS="json"
+  HTML_TEMPLATE=""
   SONAR_TOKEN=""
   SONAR_PROJECT_KEY=""
   SONAR_URL="http://localhost:9000"
@@ -282,6 +283,22 @@ setup() {
   [ "$INCLUDE_QUALITY_GATE_NAME" = "true" ]
 }
 
+@test "parse_args: --html-template sets HTML_TEMPLATE" {
+  parse_args --html-template "/tmp/my.html.tpl" --project-key "p"
+  [ "$HTML_TEMPLATE" = "/tmp/my.html.tpl" ]
+}
+
+@test "parse_args: --html-template=PATH form sets HTML_TEMPLATE" {
+  parse_args --html-template=/tmp/eq.html.tpl --project-key "p"
+  [ "$HTML_TEMPLATE" = "/tmp/eq.html.tpl" ]
+}
+
+@test "apply_defaults: defaults HTML_TEMPLATE to empty" {
+  unset HTML_TEMPLATE
+  apply_defaults
+  [ "$HTML_TEMPLATE" = "" ]
+}
+
 # ===========================================================================
 # apply_defaults — quality metadata flags
 # ===========================================================================
@@ -380,4 +397,36 @@ setup() {
   INCLUDE_QUALITY_PROFILES="maybe"
   run validate_enrichment_flags
   [ "$status" -ne 0 ]
+}
+
+@test "validate_enrichment_flags: accepts empty HTML_TEMPLATE" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  HTML_TEMPLATE=""
+  run validate_enrichment_flags
+  [ "$status" -eq 0 ]
+}
+
+@test "validate_enrichment_flags: accepts a readable HTML_TEMPLATE file" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  local tpl
+  tpl=$(mktemp)
+  echo "<html></html>" > "$tpl"
+  HTML_TEMPLATE="$tpl"
+  run validate_enrichment_flags
+  rm -f "$tpl"
+  [ "$status" -eq 0 ]
+}
+
+@test "validate_enrichment_flags: rejects a missing HTML_TEMPLATE file" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  HTML_TEMPLATE="/no/such/template-xyz.tpl"
+  run validate_enrichment_flags
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"HTML template"* ]]
 }

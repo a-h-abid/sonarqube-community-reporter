@@ -45,6 +45,10 @@ report:
   # Directory where reports are saved (relative or absolute)
   output_dir: ./reports
 
+  # Custom HTML template file (overrides the bundled default; affects HTML + PDF).
+  # Leave unset to use templates/report.html.tpl.
+  # html_template: ./my-branding/report.html.tpl
+
 # --- Analysis Polling --------------------------------------------------------
 polling:
   # Seconds between poll attempts when waiting for analysis completion

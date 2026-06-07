@@ -23,10 +23,17 @@ generate_html_report() {
   local report_data
   report_data=$(< "$report_data_file")
 
-  # Locate the template
-  local tpl_dir
-  tpl_dir="$(cd "${_REPORT_HTML_SCRIPT_DIR}/../../templates" 2>/dev/null && pwd)" || tpl_dir="/opt/sonar-report/templates"
-  local tpl_file="${tpl_dir}/report.html.tpl"
+  # Locate the template — a user-supplied HTML_TEMPLATE overrides the bundled
+  # default. Validation of the override (existence/readability) happens up front
+  # in validate_enrichment_flags; the guard below also protects direct callers.
+  local tpl_file
+  if [[ -n "${HTML_TEMPLATE:-}" ]]; then
+    tpl_file="$HTML_TEMPLATE"
+  else
+    local tpl_dir
+    tpl_dir="$(cd "${_REPORT_HTML_SCRIPT_DIR}/../../templates" 2>/dev/null && pwd)" || tpl_dir="/opt/sonar-report/templates"
+    tpl_file="${tpl_dir}/report.html.tpl"
+  fi
 
   if [[ ! -f "$tpl_file" ]]; then
     log_error "HTML template not found: ${tpl_file}"

@@ -16,6 +16,9 @@ Options:
   --formats FMT          Comma-separated formats    (env: REPORT_FORMATS)
                          Supported: json,md,html,pdf,xlsx,ods,csv,sarif
   --output-dir DIR       Output directory           (env: REPORT_OUTPUT_DIR)
+  --html-template PATH   Custom HTML template file instead of the bundled
+                         default; affects HTML and the derived PDF.
+                                                    (env: HTML_TEMPLATE)
   --wait                 Wait for analysis to complete
   --no-wait              Skip analysis polling (default)
   --poll-interval SECS   Seconds between polls      (env: POLL_INTERVAL)
@@ -201,6 +204,50 @@ Example:
 **Permissions.** Source snippet fetching requires the token to have *Browse* permission on the project. Missing rules or unavailable source files are skipped silently with a warning to stderr — the run never aborts on enrichment failures.
 
 **SonarQube version notes.** SonarQube 9.5+ exposes structured rule sections (`descriptionSections[]`) that cleanly separate "Why" and "How to fix"; older versions return a single `htmlDesc` and the split is heuristic.
+
+## Custom HTML Template
+
+By default the HTML report (and the PDF derived from it) is rendered from the
+bundled `templates/report.html.tpl`. Supply your own template for custom
+branding, colors, or sections without forking:
+
+```bash
+./scripts/sonar-report.sh \
+  --project-key my-project \
+  --token "$SONAR_TOKEN" \
+  --formats html,pdf \
+  --html-template ./my-branding/report.html.tpl
+```
+
+Also settable via the `HTML_TEMPLATE` env var or the `report.html_template`
+config key. The path must point to an existing, readable file — otherwise the
+run fails fast. The template is used verbatim; only the placeholders it
+references are substituted, and any unknown `{{...}}` text is left as-is.
+
+**Getting started:** copy the bundled template and edit it:
+
+```bash
+cp templates/report.html.tpl my-branding/report.html.tpl
+```
+
+**Available placeholders.** Single-value tokens (replaced with text):
+
+`{{PROJECT_NAME}}`, `{{PROJECT_KEY}}`, `{{BRANCH}}`, `{{REPORT_DATE}}`,
+`{{LAST_ANALYSIS_DATE}}`, `{{SONAR_URL}}`, `{{ANALYSIS_ID}}`, `{{QG_STATUS}}`,
+`{{QG_CLASS}}`, `{{BUGS}}`, `{{VULNS}}`, `{{SMELLS}}`, `{{COVERAGE}}`,
+`{{DUPLICATION}}`, `{{LOC}}`, `{{TECH_DEBT}}`, `{{DEBT_RATIO}}`,
+`{{REL_RATING}}`, `{{SEC_RATING}}`, `{{MAINT_RATING}}`,
+`{{HOTSPOTS_REVIEWED_PCT}}`, `{{SEC_REVIEW_RATING}}`, `{{NEW_BUGS}}`,
+`{{NEW_VULNS}}`, `{{NEW_SMELLS}}`, `{{NEW_COVERAGE}}`, `{{NEW_DUPLICATION}}`,
+`{{TOTAL_ISSUES}}`, `{{ISSUE_BUGS}}`, `{{ISSUE_VULNS}}`, `{{ISSUE_SMELLS}}`,
+`{{SEV_BLOCKER}}`, `{{SEV_CRITICAL}}`, `{{SEV_MAJOR}}`, `{{SEV_MINOR}}`,
+`{{SEV_INFO}}`, `{{HOTSPOT_TOTAL}}`, `{{HOTSPOT_TO_REVIEW}}`,
+`{{HOTSPOT_REVIEWED}}`.
+
+Multi-line HTML block tokens (replaced with generated tables/sections):
+
+`{{QG_CONDITIONS_TABLE}}`, `{{HOTSPOTS_TABLE}}`, `{{ISSUES_TABLE}}`,
+`{{QUALITY_GATE_NAME_ROW}}`, `{{QUALITY_PROFILES_SECTION}}`, `{{FILTERS_NOTE}}`.
 
 ## Quality Profiles & Quality Gate (audit metadata)
 

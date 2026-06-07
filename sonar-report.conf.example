@@ -49,6 +49,10 @@ REPORT_FORMATS=json,md,html,pdf,xlsx,ods
 # Directory where reports are saved (relative or absolute)
 REPORT_OUTPUT_DIR=./reports
 
+# Custom HTML template file (overrides the bundled default; affects HTML + PDF).
+# Leave empty to use templates/report.html.tpl.
+HTML_TEMPLATE=
+
 # --- Enrichment (rule descriptions & code snippets) -------------------------
 # Opt-in to richer issue/hotspot details. Each enabled enrichment adds API
 # calls per unique rule (and per unique file for code snippets), so the

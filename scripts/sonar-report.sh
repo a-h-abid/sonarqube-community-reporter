@@ -16,6 +16,9 @@
 #   --formats FMT          Comma-separated: json,md,html,pdf,xlsx,ods,csv,sarif
 #                                                       (env: REPORT_FORMATS)
 #   --output-dir DIR       Output directory             (env: REPORT_OUTPUT_DIR)
+#   --html-template PATH   Use a custom HTML template file instead of the bundled
+#                          default. Affects the HTML report and the PDF derived
+#                          from it.                     (env: HTML_TEMPLATE)
 #   --sonarcloud           Use SonarCloud API (auto-detected from URL)
 #                                                       (env: SONAR_CLOUD)
 #   --organization ORG     SonarCloud organization key  (env: SONAR_ORGANIZATION)
@@ -125,7 +128,7 @@ source "${_MAIN_SCRIPT_DIR}/wait-for-analysis.sh"
 # ===========================================================================
 _ENV_SNAPSHOT_VARS=""
 for _var in SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_TASK_ID \
-            SONAR_ORGANIZATION SONAR_CLOUD REPORT_FORMATS REPORT_OUTPUT_DIR \
+            SONAR_ORGANIZATION SONAR_CLOUD REPORT_FORMATS REPORT_OUTPUT_DIR HTML_TEMPLATE \
             POLL_INTERVAL POLL_TIMEOUT ANALYSIS_ID DRY_RUN_FILE NOTIFY_WEBHOOK \
             INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT \
             INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME \
@@ -154,6 +157,7 @@ apply_defaults() {
   [[ -z "${SONAR_CLOUD:-}" ]]               && SONAR_CLOUD="false"
   [[ -z "${REPORT_FORMATS:-}" ]]            && REPORT_FORMATS="json,md,html,pdf,xlsx,ods"
   [[ -z "${REPORT_OUTPUT_DIR:-}" ]]         && REPORT_OUTPUT_DIR="./reports"
+  [[ -z "${HTML_TEMPLATE:-}" ]]             && HTML_TEMPLATE=""
   [[ -z "${POLL_INTERVAL:-}" ]]             && POLL_INTERVAL="5"
   [[ -z "${POLL_TIMEOUT:-}" ]]              && POLL_TIMEOUT="300"
   [[ -z "${ANALYSIS_ID:-}" ]]               && ANALYSIS_ID=""
@@ -191,6 +195,8 @@ parse_args() {
       --task-id)         SONAR_TASK_ID="$2";      shift 2 ;;
       --formats)         REPORT_FORMATS="$2";     shift 2 ;;
       --output-dir)      REPORT_OUTPUT_DIR="$2";  shift 2 ;;
+      --html-template)   HTML_TEMPLATE="$2";      shift 2 ;;
+      --html-template=*) HTML_TEMPLATE="${1#*=}"; shift   ;;
       --sonarcloud)      SONAR_CLOUD=true;         shift   ;;
       --organization)    SONAR_ORGANIZATION="$2"; shift 2 ;;
       --wait)            WAIT_FOR_ANALYSIS=true;  shift   ;;
@@ -297,6 +303,18 @@ validate_enrichment_flags() {
       return 1
       ;;
   esac
+
+  # Validate HTML_TEMPLATE: when set it must be an existing, readable file.
+  if [[ -n "${HTML_TEMPLATE:-}" ]]; then
+    if [[ ! -f "$HTML_TEMPLATE" ]]; then
+      log_error "HTML template file not found: '${HTML_TEMPLATE}'"
+      return 1
+    fi
+    if [[ ! -r "$HTML_TEMPLATE" ]]; then
+      log_error "HTML template file is not readable: '${HTML_TEMPLATE}'"
+      return 1
+    fi
+  fi
 }
 
 # ---------------------------------------------------------------------------

@@ -26,7 +26,7 @@ setup() {
 
   # Unset all config vars to test clean loading
   unset SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_ORGANIZATION
-  unset SONAR_CLOUD SONAR_TASK_ID REPORT_FORMATS REPORT_OUTPUT_DIR
+  unset SONAR_CLOUD SONAR_TASK_ID REPORT_FORMATS REPORT_OUTPUT_DIR HTML_TEMPLATE
   unset POLL_INTERVAL POLL_TIMEOUT ANALYSIS_ID DRY_RUN_FILE NOTIFY_WEBHOOK
   unset INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT
   unset INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME
@@ -148,6 +148,18 @@ setup() {
   export SONAR_URL="http://env.example.com"
   parse_yaml_config "${FIXTURES}/test_config.yml"
   [ "$SONAR_URL" = "http://env.example.com" ]
+}
+
+@test "parse_yaml_config: maps report.html_template into HTML_TEMPLATE" {
+  local cfg
+  cfg=$(mktemp)
+  cat > "$cfg" <<'YML'
+report:
+  html_template: ./my-branding/report.html.tpl
+YML
+  parse_yaml_config "$cfg"
+  rm -f "$cfg"
+  [ "$HTML_TEMPLATE" = "./my-branding/report.html.tpl" ]
 }
 
 # ==============================================================================
@@ -295,4 +307,15 @@ EOF
   [[ "$output" == *"Loading config from"* ]]
   [[ "$output" == *"sonar-report.conf"* ]]
   rm -rf "$d"
+}
+
+@test "is_allowed_key: accepts HTML_TEMPLATE" {
+  run is_allowed_key "HTML_TEMPLATE"
+  [ "$status" -eq 0 ]
+}
+
+@test "yaml_key_to_env_var: maps report.html_template to HTML_TEMPLATE" {
+  run yaml_key_to_env_var "report" "html_template"
+  [ "$status" -eq 0 ]
+  [ "$output" = "HTML_TEMPLATE" ]
 }

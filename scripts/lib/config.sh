@@ -34,6 +34,7 @@ is_allowed_key() {
     SONAR_CLOUD|\
     REPORT_FORMATS|\
     REPORT_OUTPUT_DIR|\
+    HTML_TEMPLATE|\
     POLL_INTERVAL|\
     POLL_TIMEOUT|\
     ANALYSIS_ID|\
@@ -162,7 +163,7 @@ parse_shell_config() {
 #
 #   Supported sections:
 #     - sonar (url, token, project_key, branch, organization, cloud, task_id, analysis_id)
-#     - report (formats, output_dir)
+#     - report (formats, output_dir, html_template)
 #     - polling (interval, timeout, wait)
 #     - enrichment (include_rule_descriptions, include_code_snippets, snippet_context,
 #                   include_quality_profiles, include_quality_gate_name)
@@ -246,6 +247,7 @@ yaml_key_to_env_var() {
     sonar.analysis_id)                  echo "ANALYSIS_ID" ;;
     report.formats)                     echo "REPORT_FORMATS" ;;
     report.output_dir)                  echo "REPORT_OUTPUT_DIR" ;;
+    report.html_template)               echo "HTML_TEMPLATE" ;;
     polling.interval)                   echo "POLL_INTERVAL" ;;
     polling.timeout)                    echo "POLL_TIMEOUT" ;;
     polling.wait)                       echo "WAIT_FOR_ANALYSIS" ;;

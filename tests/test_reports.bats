@@ -895,6 +895,36 @@ teardown() {
   grep -q 'A&lt;b&gt;&amp;C' "$filepath"
 }
 
+@test "generate_html_report: uses custom template when HTML_TEMPLATE is set" {
+  local custom_tpl="${_OUTPUT_DIR}/custom.html.tpl"
+  cat > "$custom_tpl" <<'TPL'
+<!DOCTYPE html>
+<html><body>
+<h1>ACME BRANDED REPORT</h1>
+<p>Project: {{PROJECT_NAME}}</p>
+<p>Bugs: {{BUGS}}</p>
+</body></html>
+TPL
+  HTML_TEMPLATE="$custom_tpl" run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "ACME BRANDED REPORT" "$filepath"
+  grep -q "Project: My Project" "$filepath"
+  grep -q "Bugs: 2" "$filepath"
+  # known placeholders the custom template uses must be substituted
+  run grep -c '{{PROJECT_NAME}}' "$filepath"
+  [ "$output" = "0" ]
+}
+
+@test "generate_html_report: falls back to bundled template when HTML_TEMPLATE empty" {
+  HTML_TEMPLATE="" run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q "<!DOCTYPE html>" "$filepath"
+  run grep -c '{{[A-Z_]*}}' "$filepath"
+  [ "$output" = "0" ]
+}
+
 # ===========================================================================
 # spreadsheet helper data
 # ===========================================================================
