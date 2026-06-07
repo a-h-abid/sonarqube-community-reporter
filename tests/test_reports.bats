@@ -139,6 +139,8 @@ setup() {
   source "${REPO_ROOT}/scripts/lib/report-ods.sh"
   # shellcheck source=../scripts/lib/report-csv.sh
   source "${REPO_ROOT}/scripts/lib/report-csv.sh"
+  # shellcheck source=../scripts/lib/report-sarif.sh
+  source "${REPO_ROOT}/scripts/lib/report-sarif.sh"
   # shellcheck source=../scripts/lib/report-pdf.sh
   source "${REPO_ROOT}/scripts/lib/report-pdf.sh"
 
@@ -1367,4 +1369,131 @@ teardown() {
   [ "$status" -ne 0 ]
   [[ "$output" == *"failed to generate"* ]]
   rm -rf "$faildir"
+}
+
+# ===========================================================================
+# generate_sarif_report
+# ===========================================================================
+
+@test "generate_sarif_report: creates a .sarif file in output dir" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ -f "${lines[-1]}" ]
+  [[ "${lines[-1]}" == *.sarif ]]
+}
+
+@test "generate_sarif_report: output is valid JSON with SARIF 2.1.0 envelope" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  run jq -e '.' "$f"
+  [ "$status" -eq 0 ]
+  [ "$(jq -r '.version' "$f")" = "2.1.0" ]
+  [ "$(jq -r '."$schema"' "$f")" = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json" ]
+  [ "$(jq '.runs | length' "$f")" -eq 1 ]
+  [ "$(jq -r '.runs[0].tool.driver.name' "$f")" = "SonarQube Community Reporter" ]
+}
+
+@test "generate_sarif_report: emits one result per issue and TO_REVIEW hotspot" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  # 1 issue + 1 TO_REVIEW hotspot (the REVIEWED hotspot is excluded)
+  [ "$(jq '.runs[0].results | length' "$f")" -eq 2 ]
+}
+
+@test "generate_sarif_report: excludes REVIEWED hotspots and their rules" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  # java:S5131 belongs only to the REVIEWED hotspot HS2 — must not appear
+  [ "$(jq '[.runs[0].results[].ruleId] | index("java:S5131")' "$f")" = "null" ]
+  [ "$(jq '[.runs[0].tool.driver.rules[].id] | index("java:S5131")' "$f")" = "null" ]
+}
+
+@test "generate_sarif_report: de-duplicates rules and ruleIndex resolves" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  # rule ids are unique
+  [ "$(jq '.runs[0].tool.driver.rules | length' "$f")" = "$(jq '[.runs[0].tool.driver.rules[].id] | unique | length' "$f")" ]
+  # every result's ruleIndex points at a rule whose id matches its ruleId
+  [ "$(jq '[.runs[0] as $r | $r.results[] | $r.tool.driver.rules[.ruleIndex].id == .ruleId] | all' "$f")" = "true" ]
+}
+
+@test "generate_sarif_report: maps severity to SARIF level" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  # CRITICAL issue -> error
+  [ "$(jq -r '.runs[0].results[] | select(.ruleId=="java:S2259") | .level' "$f")" = "error" ]
+  # HIGH hotspot -> error
+  [ "$(jq -r '.runs[0].results[] | select(.ruleId=="java:S3649") | .level' "$f")" = "error" ]
+}
+
+@test "generate_sarif_report: builds repo-relative uri and a region" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  local loc='.runs[0].results[] | select(.ruleId=="java:S2259") | .locations[0].physicalLocation'
+  [ "$(jq -r "$loc.artifactLocation.uri" "$f")" = "src/Main.java" ]
+  [ "$(jq "$loc.region.startLine" "$f")" -eq 42 ]
+}
+
+@test "generate_sarif_report: sets stable partialFingerprints from issue key" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  [ "$(jq -r '.runs[0].results[] | select(.ruleId=="java:S2259") | .partialFingerprints."sonarIssueKey/v1"' "$f")" = "AXyz111" ]
+}
+
+@test "generate_sarif_report: hotspot rule carries security-severity" {
+  run generate_sarif_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  [ "$(jq -r '.runs[0].tool.driver.rules[] | select(.id=="java:S3649") | .properties["security-severity"]' "$f")" = "8.0" ]
+}
+
+@test "generate_sarif_report: null-line finding omits region but keeps location" {
+  local data; data=$(mktemp)
+  jq '.issues = [{
+        "key": "NL1", "severity": "MINOR", "type": "CODE_SMELL",
+        "message": "Add a newline at end of file",
+        "component": "my-project:src/Eof.java",
+        "line": null, "startLine": null, "endLine": null,
+        "rule": "java:S113", "effort": "1min", "creationDate": "2024-01-15T10:00:00+0000"
+      }] | .hotspots = []' "$_REPORT_DATA_FILE" > "$data"
+  run generate_sarif_report "$data" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  local loc='.runs[0].results[0].locations[0].physicalLocation'
+  [ "$(jq -r "$loc.artifactLocation.uri" "$f")" = "src/Eof.java" ]
+  [ "$(jq "$loc | has(\"region\")" "$f")" = "false" ]
+  rm -f "$data"
+}
+
+@test "generate_sarif_report: empty issues and hotspots yield empty results" {
+  local data; data=$(mktemp)
+  jq '.issues = [] | .hotspots = []' "$_REPORT_DATA_FILE" > "$data"
+  run generate_sarif_report "$data" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  [ "$(jq '.runs[0].results | length' "$f")" -eq 0 ]
+  [ "$(jq '.runs[0].tool.driver.rules | length' "$f")" -eq 0 ]
+  rm -f "$data"
+}
+
+@test "generate_sarif_report: drops fileless findings and warns" {
+  local data; data=$(mktemp)
+  jq '.issues = [{
+        "key": "NF1", "severity": "MAJOR", "type": "CODE_SMELL",
+        "message": "Project-level issue", "component": "",
+        "line": null, "rule": "java:S0000", "creationDate": "2024-01-15T10:00:00+0000"
+      }] | .hotspots = []' "$_REPORT_DATA_FILE" > "$data"
+  run generate_sarif_report "$data" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"skipped 1 finding"* ]]
+  local f="${lines[-1]}"
+  [ "$(jq '.runs[0].results | length' "$f")" -eq 0 ]
+  rm -f "$data"
 }

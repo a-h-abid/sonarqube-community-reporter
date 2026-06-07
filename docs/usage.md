@@ -14,7 +14,7 @@ Options:
   --branch BRANCH        Branch name (optional)     (env: SONAR_BRANCH)
   --task-id ID           CE task ID to poll         (env: SONAR_TASK_ID)
   --formats FMT          Comma-separated formats    (env: REPORT_FORMATS)
-                         Supported: json,md,html,pdf,xlsx,ods,csv
+                         Supported: json,md,html,pdf,xlsx,ods,csv,sarif
   --output-dir DIR       Output directory           (env: REPORT_OUTPUT_DIR)
   --wait                 Wait for analysis to complete
   --no-wait              Skip analysis polling (default)
@@ -236,6 +236,38 @@ Three files are written to the output directory:
 - `{project_key}_{timestamp}_summary.csv` — KPI-level metrics
 - `{project_key}_{timestamp}_issues.csv` — All open issues
 - `{project_key}_{timestamp}_hotspots.csv` — All security hotspots
+
+## SARIF 2.1 Export
+
+The `sarif` format exports findings as a single [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html) JSON document (`{project_key}_{timestamp}.sarif`). It requires no tools beyond `jq` (already a prerequisite) and is designed for upload to **GitHub code scanning** (the repository **Security** tab) or any other SARIF-aware tool:
+
+```bash
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 \
+  --token YOUR_TOKEN \
+  --project-key my-project \
+  --formats sarif
+```
+
+What the document contains:
+
+- **Results** — every open issue plus every `TO_REVIEW` security hotspot (reviewed/safe hotspots are excluded so they don't surface as open alerts).
+- **Rules** — de-duplicated by SonarQube rule key, with a `helpUri` linking back to the rule page on your SonarQube server. When `--include-rule-descriptions` is enabled, the rule's "Why is this an issue?" / "How to fix it" text is embedded as the rule description.
+- **Severity** — SonarQube severities map to SARIF levels: `BLOCKER`/`CRITICAL` → `error`, `MAJOR` → `warning`, `MINOR`/`INFO` → `note`. Security rules also carry a numeric `security-severity` property used by GitHub to bucket alerts.
+- **Locations** — file paths are repo-relative (the `projectKey:` prefix is stripped) with `region.startLine`/`endLine`. File-/project-level findings with no line are emitted as file-level locations without a region. Findings with no file are skipped (and logged).
+- **Stable tracking** — each result carries `partialFingerprints` derived from the stable SonarQube issue key, so GitHub tracks one alert per issue across runs.
+
+> **Note.** Column offsets are not emitted; line-level locations are sufficient for clickable GitHub alerts. Code flows are not available from the SonarQube Community API.
+
+### Upload to GitHub code scanning
+
+```yaml
+# In a GitHub Actions workflow, after generating the report:
+- name: Upload SARIF to GitHub
+  uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: reports/   # directory containing the .sarif file(s)
+```
 
 ## Dry-Run / Offline Mode
 

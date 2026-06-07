@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ==============================================================================
 # sonar-report.sh — Main entrypoint: fetch SonarQube analysis data & generate
-#                    reports in JSON, Markdown, HTML, PDF, XLSX, ODS, and CSV.
+#                    reports in JSON, Markdown, HTML, PDF, XLSX, ODS, CSV, and SARIF.
 # ==============================================================================
 # HELP_BEGIN
 # Usage:
@@ -13,7 +13,7 @@
 #   --project-key KEY      Project key                  (env: SONAR_PROJECT_KEY)
 #   --branch BRANCH        Branch name (optional)       (env: SONAR_BRANCH)
 #   --task-id ID           CE task ID to poll           (env: SONAR_TASK_ID)
-#   --formats FMT          Comma-separated: json,md,html,pdf,xlsx,ods,csv
+#   --formats FMT          Comma-separated: json,md,html,pdf,xlsx,ods,csv,sarif
 #                                                       (env: REPORT_FORMATS)
 #   --output-dir DIR       Output directory             (env: REPORT_OUTPUT_DIR)
 #   --sonarcloud           Use SonarCloud API (auto-detected from URL)
@@ -99,6 +99,8 @@ source "${_MAIN_SCRIPT_DIR}/lib/report-xlsx.sh"
 source "${_MAIN_SCRIPT_DIR}/lib/report-ods.sh"
 # shellcheck source=scripts/lib/report-csv.sh
 source "${_MAIN_SCRIPT_DIR}/lib/report-csv.sh"
+# shellcheck source=scripts/lib/report-sarif.sh
+source "${_MAIN_SCRIPT_DIR}/lib/report-sarif.sh"
 # shellcheck source=scripts/lib/notify.sh
 source "${_MAIN_SCRIPT_DIR}/lib/notify.sh"
 # shellcheck source=scripts/wait-for-analysis.sh
@@ -287,7 +289,7 @@ validate_report_formats() {
 
   if [[ "${#raw_formats[@]}" -eq 0 ]]; then
     log_error "At least one report format is required"
-    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods, csv"
+    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods, csv, sarif"
     return 1
   fi
 
@@ -301,7 +303,7 @@ validate_report_formats() {
     fi
 
     case "$fmt" in
-      json|md|html|pdf|xlsx|ods|csv)
+      json|md|html|pdf|xlsx|ods|csv|sarif)
         if contains_value "$fmt" "${normalized_formats[@]}"; then
           log_warn "Duplicate format '${raw}' requested — keeping one"
           continue
@@ -316,7 +318,7 @@ validate_report_formats() {
   done
 
   if [[ "$errors" -gt 0 ]]; then
-    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods, csv"
+    log_info "Supported formats: json, md, markdown, html, pdf, xlsx, ods, csv, sarif"
     return 1
   fi
 
@@ -559,6 +561,11 @@ main() {
         while IFS= read -r f; do
           [[ -n "$f" ]] && generated_files+=("$f")
         done <<< "$csv_out"
+        ;;
+      sarif)
+        local f
+        f=$(generate_sarif_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+        generated_files+=("$f")
         ;;
     esac
   done

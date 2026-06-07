@@ -6,7 +6,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 
 ## Features
 
-- **Multi-format reports** — JSON, Markdown, HTML (styled), PDF, XLSX, ODS, and CSV with project metadata including report date, last analysis datetime, and analysis ID
+- **Multi-format reports** — JSON, Markdown, HTML (styled), PDF, XLSX, ODS, CSV, and SARIF 2.1 (GitHub code scanning) with project metadata including report date, last analysis datetime, and analysis ID
 - **All key metrics** — Quality Gate, bugs, vulnerabilities, code smells, coverage, duplications, technical debt, security hotspots, ratings (A–E)
 - **New Code Period** — Track metrics on newly added code
 - **Issues Details** — Lists all open issues with severity, type, rule, file/line details, and effort

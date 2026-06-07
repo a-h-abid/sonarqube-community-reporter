@@ -101,11 +101,12 @@ teardown() {
 
 @test "main: dry-run generates all formats when tools present" {
   PATH="$PRESENT" run main --dry-run "$FIXTURE" \
-    --formats json,md,html,pdf,xlsx,ods,csv --output-dir "$OUT"
+    --formats json,md,html,pdf,xlsx,ods,csv,sarif --output-dir "$OUT"
   [ "$status" -eq 0 ]
   [ -n "$(find "$OUT" -name '*.pdf')" ]
   [ -n "$(find "$OUT" -name '*.xlsx')" ]
   [ -n "$(find "$OUT" -name '*.ods')" ]
+  [ -n "$(find "$OUT" -name '*.sarif')" ]
 }
 
 @test "main: pdf reuses already-generated html (html+pdf requested)" {
