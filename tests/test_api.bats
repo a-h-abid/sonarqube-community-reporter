@@ -87,8 +87,10 @@ setup() {
   SONAR_REPORT_TMP_DIR="${locked_parent}/blocked"
 
   tmp_file=$(create_temp_file)
+  local system_tmp_root="${TMPDIR:-/tmp}"
+  system_tmp_root="${system_tmp_root%/}"
 
-  [[ "$tmp_file" == "${TMPDIR:-/tmp}/"* ]]
+  [[ "$tmp_file" == "${system_tmp_root}/"* ]]
   [[ "$tmp_file" != "${locked_parent}/"* ]]
   [[ "$(basename "$tmp_file")" == "sonar-report."* ]]
   [ -f "$tmp_file" ]
