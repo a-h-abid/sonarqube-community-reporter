@@ -83,8 +83,10 @@ setup() {
   local tmp_file=""
   cleanup_tmp_fallback_test() {
     [[ -n "${tmp_file:-}" ]] && rm -f "$tmp_file"
-    chmod 0755 "$locked_parent" 2>/dev/null || true
-    rm -rf "$locked_parent"
+    if [[ -n "${locked_parent:-}" ]]; then
+      chmod 0755 "$locked_parent" 2>/dev/null || true
+      rm -rf "$locked_parent"
+    fi
   }
   trap cleanup_tmp_fallback_test RETURN
 
