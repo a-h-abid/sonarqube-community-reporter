@@ -73,6 +73,14 @@ fallback_tmp_dir() {
 
 create_temp_path() {
   local temp_kind="$1"
+  case "$temp_kind" in
+    file|dir) ;;
+    *)
+      log_error "Unsupported temp path kind: ${temp_kind}"
+      return 1
+      ;;
+  esac
+
   local preferred_tmp_dir="${SONAR_REPORT_TMP_DIR:-${_API_PROJECT_ROOT}/tmp}"
   local tmp_path
   if mkdir -p "$preferred_tmp_dir" 2>/dev/null && [[ -w "$preferred_tmp_dir" ]]; then
