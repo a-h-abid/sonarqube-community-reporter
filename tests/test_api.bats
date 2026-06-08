@@ -78,11 +78,11 @@ setup() {
 }
 
 @test "create_temp_file: falls back to system tmp when preferred dir cannot be created" {
-  local blocked_parent
-  blocked_parent=$(mktemp)
+  local blocked_parent_file
+  blocked_parent_file=$(mktemp)
   local tmp_file=""
 
-  SONAR_REPORT_TMP_DIR="${blocked_parent}/blocked"
+  SONAR_REPORT_TMP_DIR="${blocked_parent_file}/blocked"
 
   tmp_file=$(create_temp_file)
   local system_tmp_root
@@ -90,22 +90,24 @@ setup() {
   system_tmp_root="${system_tmp_root%/}"
 
   [[ "$tmp_file" == "${system_tmp_root}/"* ]]
-  [[ "$tmp_file" != "${blocked_parent}/"* ]]
+  [[ "$tmp_file" != "${blocked_parent_file}/"* ]]
   [[ "$(basename "$tmp_file")" == "sonar-report."* ]]
   [ -f "$tmp_file" ]
 
-  rm -f "$tmp_file" "$blocked_parent"
+  rm -f "$tmp_file" "$blocked_parent_file"
 }
 
 @test "create_temp_file: falls back to system tmp when mktemp fails in the preferred dir" {
   local blocked_tmp_dir
   blocked_tmp_dir=$(mktemp -d)
   local tmp_file=""
+  local preferred_template="${blocked_tmp_dir}/sonar-report.XXXXXX"
   SONAR_REPORT_TMP_DIR="$blocked_tmp_dir"
 
   mktemp() {
-    if [[ "${1:-}" == "${blocked_tmp_dir}/sonar-report.XXXXXX" ]]; then
+    if [[ "${1:-}" == "$preferred_template" ]]; then
       command rm -rf "$blocked_tmp_dir"
+      return 1
     fi
     command mktemp "$@"
   }
