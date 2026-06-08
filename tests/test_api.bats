@@ -77,21 +77,12 @@ setup() {
   rm -rf "$tmp_dir"
 }
 
-@test "create_temp_file: falls back to system tmp when preferred dir is not writable" {
-  local locked_parent
-  locked_parent=$(mktemp -d)
+@test "create_temp_file: falls back to system tmp when preferred dir cannot be created" {
+  local blocked_parent
+  blocked_parent=$(mktemp)
   local tmp_file=""
-  cleanup_tmp_fallback_test() {
-    [[ -n "${tmp_file:-}" ]] && rm -f "$tmp_file"
-    if [[ -n "${locked_parent:-}" ]]; then
-      chmod 0755 "$locked_parent" 2>/dev/null || true
-      rm -rf "$locked_parent"
-    fi
-  }
-  trap cleanup_tmp_fallback_test RETURN
 
-  chmod 0555 "$locked_parent"
-  SONAR_REPORT_TMP_DIR="${locked_parent}/blocked"
+  SONAR_REPORT_TMP_DIR="${blocked_parent}/blocked"
 
   tmp_file=$(create_temp_file)
   local system_tmp_root
@@ -99,26 +90,25 @@ setup() {
   system_tmp_root="${system_tmp_root%/}"
 
   [[ "$tmp_file" == "${system_tmp_root}/"* ]]
-  [[ "$tmp_file" != "${locked_parent}/"* ]]
+  [[ "$tmp_file" != "${blocked_parent}/"* ]]
   [[ "$(basename "$tmp_file")" == "sonar-report."* ]]
   [ -f "$tmp_file" ]
+
+  rm -f "$tmp_file" "$blocked_parent"
 }
 
-@test "create_temp_file: falls back to system tmp when preferred dir already exists but is not writable" {
+@test "create_temp_file: falls back to system tmp when mktemp fails in the preferred dir" {
   local blocked_tmp_dir
   blocked_tmp_dir=$(mktemp -d)
   local tmp_file=""
-  cleanup_unwritable_tmp_dir_test() {
-    [[ -n "${tmp_file:-}" ]] && rm -f "$tmp_file"
-    if [[ -n "${blocked_tmp_dir:-}" ]]; then
-      chmod 0755 "$blocked_tmp_dir" 2>/dev/null || true
-      rm -rf "$blocked_tmp_dir"
-    fi
-  }
-  trap cleanup_unwritable_tmp_dir_test RETURN
-
-  chmod 0555 "$blocked_tmp_dir"
   SONAR_REPORT_TMP_DIR="$blocked_tmp_dir"
+
+  mktemp() {
+    if [[ "${1:-}" == "${blocked_tmp_dir}/sonar-report.XXXXXX" ]]; then
+      command rm -rf "$blocked_tmp_dir"
+    fi
+    command mktemp "$@"
+  }
 
   tmp_file=$(create_temp_file)
   local system_tmp_root
@@ -129,6 +119,9 @@ setup() {
   [[ "$tmp_file" != "${blocked_tmp_dir}/"* ]]
   [[ "$(basename "$tmp_file")" == "sonar-report."* ]]
   [ -f "$tmp_file" ]
+
+  unset -f mktemp
+  rm -f "$tmp_file"
 }
 
 # ===========================================================================
