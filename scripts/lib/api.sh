@@ -72,7 +72,7 @@ fallback_tmp_dir() {
 }
 
 create_temp_path() {
-  local temp_kind="$1"
+  local temp_kind="${1:-}"
   case "$temp_kind" in
     file|dir) ;;
     *)

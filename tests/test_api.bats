@@ -126,6 +126,33 @@ setup() {
   [ -f "$TEST_API_TMP_FILE" ]
 }
 
+@test "create_temp_dir: falls back to system tmp when the preferred dir vanishes before mktemp" {
+  TEST_API_BLOCKED_TMP_DIR=$(mktemp -d)
+  local preferred_template="${TEST_API_BLOCKED_TMP_DIR}/sonar-report.XXXXXX"
+  SONAR_REPORT_TMP_DIR="$TEST_API_BLOCKED_TMP_DIR"
+
+  mktemp() {
+    if [[ "${1:-}" == "-d" ]] && [[ "${2:-}" == "$preferred_template" ]]; then
+      command rm -rf "$TEST_API_BLOCKED_TMP_DIR"
+      return 1
+    fi
+    command mktemp "$@"
+  }
+
+  local tmp_dir
+  tmp_dir=$(create_temp_dir)
+  local system_tmp_root
+  system_tmp_root="${TMPDIR:-/tmp}"
+  system_tmp_root="${system_tmp_root%/}"
+
+  [[ "$tmp_dir" == "${system_tmp_root}/"* ]]
+  [[ "$tmp_dir" != "${TEST_API_BLOCKED_TMP_DIR}/"* ]]
+  [[ "$(basename "$tmp_dir")" == "sonar-report."* ]]
+  [ -d "$tmp_dir" ]
+
+  rm -rf "$tmp_dir"
+}
+
 # ===========================================================================
 # rating_to_letter
 # ===========================================================================
