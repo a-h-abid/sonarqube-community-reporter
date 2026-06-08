@@ -13,6 +13,7 @@ RUN set -eux; \
       ca-certificates \
       build-essential \
       cmake \
+      python3 \
       binutils-dev \
       libcurl4 \
       libcurl4-openssl-dev \
