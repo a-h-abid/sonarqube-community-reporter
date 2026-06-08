@@ -1,0 +1,11 @@
+name: sonarqube-community-reporter
+
+services:
+  coverage:
+    build:
+      context: .
+      dockerfile: coverage.Dockerfile
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+    command: bash tests/run_coverage.sh --min-coverage 92
