@@ -61,21 +61,43 @@ project_tmp_dir() {
     return 0
   fi
 
-  local fallback_tmp_dir="${TMPDIR:-/tmp}/sonar-report"
-  mkdir -p "$fallback_tmp_dir" || return 1
-  [[ -w "$fallback_tmp_dir" ]] || return 1
-  echo "$fallback_tmp_dir"
+  fallback_tmp_dir
+}
+
+fallback_tmp_dir() {
+  local tmp_dir="${TMPDIR:-/tmp}/sonar-report"
+  mkdir -p "$tmp_dir" || return 1
+  [[ -w "$tmp_dir" ]] || return 1
+  echo "$tmp_dir"
 }
 
 create_temp_file() {
+  local preferred_tmp_dir="${SONAR_REPORT_TMP_DIR:-${_API_PROJECT_ROOT}/tmp}"
+  local tmp_path
+  if mkdir -p "$preferred_tmp_dir" 2>/dev/null && [[ -w "$preferred_tmp_dir" ]]; then
+    if tmp_path=$(mktemp "${preferred_tmp_dir}/sonar-report.XXXXXX" 2>/dev/null); then
+      echo "$tmp_path"
+      return 0
+    fi
+  fi
+
   local tmp_dir
-  tmp_dir=$(project_tmp_dir) || return 1
+  tmp_dir=$(fallback_tmp_dir) || return 1
   mktemp "${tmp_dir}/sonar-report.XXXXXX"
 }
 
 create_temp_dir() {
+  local preferred_tmp_dir="${SONAR_REPORT_TMP_DIR:-${_API_PROJECT_ROOT}/tmp}"
+  local tmp_path
+  if mkdir -p "$preferred_tmp_dir" 2>/dev/null && [[ -w "$preferred_tmp_dir" ]]; then
+    if tmp_path=$(mktemp -d "${preferred_tmp_dir}/sonar-report.XXXXXX" 2>/dev/null); then
+      echo "$tmp_path"
+      return 0
+    fi
+  fi
+
   local tmp_dir
-  tmp_dir=$(project_tmp_dir) || return 1
+  tmp_dir=$(fallback_tmp_dir) || return 1
   mktemp -d "${tmp_dir}/sonar-report.XXXXXX"
 }
 
