@@ -32,7 +32,7 @@ RUN set -eux; \
       -DCMAKE_INSTALL_PREFIX="/usr/local"; \
     cmake --build "${tmpdir}/build" --parallel "$(nproc)"; \
     cmake --install "${tmpdir}/build"; \
-    rm -rf "${tmpdir}" /var/lib/apt/lists/*; \
+    apt-get clean; rm -rf "${tmpdir}" /var/lib/apt/lists/* /var/cache/apt/archives/*; \
     bats --version; \
     jq --version; \
     kcov --version
