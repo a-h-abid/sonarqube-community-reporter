@@ -22,6 +22,15 @@ FIXTURES="${REPO_ROOT}/tests/fixtures"
 # shellcheck source=helpers.bash
 load 'helpers'
 
+teardown() {
+  [[ -n "${TEST_API_TMP_FILE:-}" ]] && rm -f "$TEST_API_TMP_FILE"
+  [[ -n "${TEST_API_BLOCKED_PARENT_FILE:-}" ]] && rm -f "$TEST_API_BLOCKED_PARENT_FILE"
+  [[ -n "${TEST_API_BLOCKED_TMP_DIR:-}" ]] && rm -rf "$TEST_API_BLOCKED_TMP_DIR"
+  unset TEST_API_TMP_FILE TEST_API_BLOCKED_PARENT_FILE TEST_API_BLOCKED_TMP_DIR
+  unset SONAR_REPORT_TMP_DIR
+  unset -f mktemp 2>/dev/null || true
+}
+
 setup() {
   # Source api.sh — provides all functions under test
   # shellcheck source=../scripts/lib/api.sh
@@ -78,52 +87,43 @@ setup() {
 }
 
 @test "create_temp_file: falls back to system tmp when preferred dir cannot be created" {
-  local blocked_parent_file
-  blocked_parent_file=$(mktemp)
-  local tmp_file=""
+  TEST_API_BLOCKED_PARENT_FILE=$(mktemp)
 
-  SONAR_REPORT_TMP_DIR="${blocked_parent_file}/blocked"
+  SONAR_REPORT_TMP_DIR="${TEST_API_BLOCKED_PARENT_FILE}/blocked"
 
-  tmp_file=$(create_temp_file)
+  TEST_API_TMP_FILE=$(create_temp_file)
   local system_tmp_root
   system_tmp_root="${TMPDIR:-/tmp}"
   system_tmp_root="${system_tmp_root%/}"
 
-  [[ "$tmp_file" == "${system_tmp_root}/"* ]]
-  [[ "$tmp_file" != "${blocked_parent_file}/"* ]]
-  [[ "$(basename "$tmp_file")" == "sonar-report."* ]]
-  [ -f "$tmp_file" ]
-
-  rm -f "$tmp_file" "$blocked_parent_file"
+  [[ "$TEST_API_TMP_FILE" == "${system_tmp_root}/"* ]]
+  [[ "$TEST_API_TMP_FILE" != "${TEST_API_BLOCKED_PARENT_FILE}/"* ]]
+  [[ "$(basename "$TEST_API_TMP_FILE")" == "sonar-report."* ]]
+  [ -f "$TEST_API_TMP_FILE" ]
 }
 
-@test "create_temp_file: falls back to system tmp when mktemp fails in the preferred dir" {
-  local blocked_tmp_dir
-  blocked_tmp_dir=$(mktemp -d)
-  local tmp_file=""
-  local preferred_template="${blocked_tmp_dir}/sonar-report.XXXXXX"
-  SONAR_REPORT_TMP_DIR="$blocked_tmp_dir"
+@test "create_temp_file: falls back to system tmp when the preferred dir vanishes before mktemp" {
+  TEST_API_BLOCKED_TMP_DIR=$(mktemp -d)
+  local preferred_template="${TEST_API_BLOCKED_TMP_DIR}/sonar-report.XXXXXX"
+  SONAR_REPORT_TMP_DIR="$TEST_API_BLOCKED_TMP_DIR"
 
   mktemp() {
     if [[ "${1:-}" == "$preferred_template" ]]; then
-      command rm -rf "$blocked_tmp_dir"
+      command rm -rf "$TEST_API_BLOCKED_TMP_DIR"
       return 1
     fi
     command mktemp "$@"
   }
 
-  tmp_file=$(create_temp_file)
+  TEST_API_TMP_FILE=$(create_temp_file)
   local system_tmp_root
   system_tmp_root="${TMPDIR:-/tmp}"
   system_tmp_root="${system_tmp_root%/}"
 
-  [[ "$tmp_file" == "${system_tmp_root}/"* ]]
-  [[ "$tmp_file" != "${blocked_tmp_dir}/"* ]]
-  [[ "$(basename "$tmp_file")" == "sonar-report."* ]]
-  [ -f "$tmp_file" ]
-
-  unset -f mktemp
-  rm -f "$tmp_file"
+  [[ "$TEST_API_TMP_FILE" == "${system_tmp_root}/"* ]]
+  [[ "$TEST_API_TMP_FILE" != "${TEST_API_BLOCKED_TMP_DIR}/"* ]]
+  [[ "$(basename "$TEST_API_TMP_FILE")" == "sonar-report."* ]]
+  [ -f "$TEST_API_TMP_FILE" ]
 }
 
 # ===========================================================================
