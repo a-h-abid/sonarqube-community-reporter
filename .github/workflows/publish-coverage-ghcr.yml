@@ -21,6 +21,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          : "${GITHUB_REPOSITORY:?GITHUB_REPOSITORY is required}"
+          # GHCR repository names must be lowercase.
           image_repo="ghcr.io/${GITHUB_REPOSITORY,,}-coverage"
           echo "image_repo=$image_repo" >> "$GITHUB_OUTPUT"
 
