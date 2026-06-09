@@ -19,6 +19,12 @@ generate_html_report() {
   local report_data_file="$1"
   local output_dir="$2"
 
+  # Portfolio (multi-project) reports use a dedicated roll-up template.
+  if [[ "$(jq -r '.metadata.reportType // "single"' "$report_data_file")" == "portfolio" ]]; then
+    generate_html_portfolio_report "$report_data_file" "$output_dir"
+    return $?
+  fi
+
   # Read report data from file — avoids passing large JSON as arguments
   local report_data
   report_data=$(< "$report_data_file")
@@ -254,6 +260,137 @@ generate_html_report() {
   local filepath="${output_dir}/${filename}"
   mkdir -p "$output_dir"
 
+  mv "$tmpfile" "$filepath"
+
+  log_ok "HTML report → ${filepath}"
+  echo "$filepath"
+}
+
+# ---------------------------------------------------------------------------
+# generate_html_portfolio_report <report_data_json> <output_dir>
+#   Renders a portfolio roll-up (org totals, gate counts, worst offenders,
+#   per-project comparison, and per-project drill-down) as a styled HTML page.
+#   A user-supplied HTML_TEMPLATE overrides the bundled portfolio template.
+# ---------------------------------------------------------------------------
+generate_html_portfolio_report() {
+  local report_data_file="$1"
+  local output_dir="$2"
+
+  local report_data
+  report_data=$(< "$report_data_file")
+
+  local tpl_file
+  if [[ -n "${HTML_TEMPLATE:-}" ]]; then
+    tpl_file="$HTML_TEMPLATE"
+  else
+    local tpl_dir
+    tpl_dir="$(cd "${_REPORT_HTML_SCRIPT_DIR}/../../templates" 2>/dev/null && pwd)" || tpl_dir="/opt/sonar-report/templates"
+    tpl_file="${tpl_dir}/portfolio.html.tpl"
+  fi
+
+  if [[ ! -f "$tpl_file" ]]; then
+    log_error "Portfolio HTML template not found: ${tpl_file}"
+    return 1
+  fi
+
+  # --- Scalars ---
+  local report_date sonar_url organization project_count
+  report_date=$(echo "$report_data" | jq -r '.metadata.reportDate // "N/A"')
+  sonar_url=$(echo "$report_data" | jq -r '.metadata.sonarUrl // ""')
+  organization=$(echo "$report_data" | jq -r '.metadata.organization // ""')
+  project_count=$(echo "$report_data" | jq -r '.metadata.projectCount // 0')
+
+  local gates_passed gates_failed gates_other
+  gates_passed=$(echo "$report_data" | jq -r '.portfolio.totals.gatesPassed // 0')
+  gates_failed=$(echo "$report_data" | jq -r '.portfolio.totals.gatesFailed // 0')
+  gates_other=$(echo "$report_data" | jq -r '.portfolio.totals.gatesOther // 0')
+
+  local total_bugs total_vulns total_smells total_issues total_hotspots hotspots_to_review total_loc
+  total_bugs=$(echo "$report_data" | jq -r '.portfolio.totals.bugs // 0')
+  total_vulns=$(echo "$report_data" | jq -r '.portfolio.totals.vulnerabilities // 0')
+  total_smells=$(echo "$report_data" | jq -r '.portfolio.totals.code_smells // 0')
+  total_issues=$(echo "$report_data" | jq -r '.portfolio.totals.issues.total // 0')
+  total_hotspots=$(echo "$report_data" | jq -r '.portfolio.totals.hotspots.total // 0')
+  hotspots_to_review=$(echo "$report_data" | jq -r '.portfolio.totals.hotspots.toReview // 0')
+  total_loc=$(echo "$report_data" | jq -r '.portfolio.totals.ncloc // 0')
+
+  local sev_blocker_critical
+  sev_blocker_critical=$(echo "$report_data" | jq -r '(.portfolio.totals.issues.bySeverity.BLOCKER // 0) + (.portfolio.totals.issues.bySeverity.CRITICAL // 0)')
+
+  local tech_debt avg_coverage avg_duplication
+  tech_debt=$(format_duration "$(echo "$report_data" | jq -r '.portfolio.totals.sqale_index // 0')")
+  avg_coverage=$(echo "$report_data" | jq -r 'if .portfolio.aggregates.coverage == null then "N/A" else ((.portfolio.aggregates.coverage | tostring) + "%") end')
+  avg_duplication=$(echo "$report_data" | jq -r 'if .portfolio.aggregates.duplicated_lines_density == null then "N/A" else ((.portfolio.aggregates.duplicated_lines_density | tostring) + "%") end')
+
+  # Organization row (only when set)
+  local organization_row=""
+  if [[ -n "$organization" ]]; then
+    local org_esc
+    org_esc=$(echo "$organization" | jq -rR 'gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;")')
+    organization_row="Organization: <strong>${org_esc}</strong> &nbsp;|&nbsp;"
+  fi
+
+  # --- Table blocks (multiline → file-based awk replacement) ---
+  local worst_table comparison_table project_sections
+  worst_table=$(echo "$report_data" | jq -r -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-portfolio-worst.jq")
+  comparison_table=$(echo "$report_data" | jq -r -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-portfolio-comparison.jq")
+  project_sections=$(echo "$report_data" | jq -r -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-portfolio-projects.jq")
+
+  # --- Substitute scalar placeholders ---
+  local html
+  html=$(cat "$tpl_file")
+  html=$(echo "$html" | sed \
+    -e "s|{{PROJECT_COUNT}}|${project_count}|g" \
+    -e "s|{{REPORT_DATE}}|${report_date}|g" \
+    -e "s|{{SONAR_URL}}|${sonar_url}|g" \
+    -e "s|{{GATES_PASSED}}|${gates_passed}|g" \
+    -e "s|{{GATES_FAILED}}|${gates_failed}|g" \
+    -e "s|{{GATES_OTHER}}|${gates_other}|g" \
+    -e "s|{{TOTAL_BUGS}}|${total_bugs}|g" \
+    -e "s|{{TOTAL_VULNS}}|${total_vulns}|g" \
+    -e "s|{{TOTAL_SMELLS}}|${total_smells}|g" \
+    -e "s|{{TOTAL_ISSUES}}|${total_issues}|g" \
+    -e "s|{{TOTAL_HOTSPOTS}}|${total_hotspots}|g" \
+    -e "s|{{HOTSPOTS_TO_REVIEW}}|${hotspots_to_review}|g" \
+    -e "s|{{TOTAL_LOC}}|${total_loc}|g" \
+    -e "s|{{TECH_DEBT}}|${tech_debt}|g" \
+    -e "s|{{AVG_COVERAGE}}|${avg_coverage}|g" \
+    -e "s|{{AVG_DUPLICATION}}|${avg_duplication}|g" \
+    -e "s|{{SEV_BLOCKER_CRITICAL}}|${sev_blocker_critical}|g" \
+  )
+
+  local tmpfile
+  tmpfile=$(create_temp_file)
+  # shellcheck disable=SC2064
+  trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile" "${tmpfile}.tmp" "${tmpfile}.rep"' RETURN
+  echo "$html" > "$tmpfile"
+
+  # Organization row contains '|' and '&' — replace via awk (not sed).
+  printf '%s' "$organization_row" > "${tmpfile}.rep"
+  awk -v ph="{{ORGANIZATION_ROW}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+
+  printf '%s' "$worst_table" > "${tmpfile}.rep"
+  awk -v ph="{{WORST_OFFENDERS_TABLE}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+
+  printf '%s' "$comparison_table" > "${tmpfile}.rep"
+  awk -v ph="{{COMPARISON_TABLE}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+
+  printf '%s' "$project_sections" > "${tmpfile}.rep"
+  awk -v ph="{{PER_PROJECT_SECTIONS}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+  rm -f "${tmpfile}.rep"
+
+  local timestamp
+  timestamp=$(date '+%Y%m%d_%H%M%S')
+  local filepath="${output_dir}/portfolio_${timestamp}.html"
+  mkdir -p "$output_dir"
   mv "$tmpfile" "$filepath"
 
   log_ok "HTML report → ${filepath}"

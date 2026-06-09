@@ -44,8 +44,10 @@ def hotspot_secsev:
   elif . == "MEDIUM" then "5.0"
   else "2.0" end;
 
-. as $root
-| ($root.metadata.projectKey // "")                        as $projectKey
+# Build one SARIF run object from a single-project report root ($root).
+# A portfolio report emits one run per project; a single project emits one run.
+def build_run($root):
+  ($root.metadata.projectKey // "")                        as $projectKey
 | (($root.metadata.sonarUrl // "") | sub("/+$"; ""))        as $sonarUrl
 | ($root.metadata.branch // "")                             as $branch
 | ($root.metadata.analysisId // "")                         as $analysisId
@@ -141,29 +143,34 @@ def hotspot_secsev:
       )
   ) as $results
 
+# --- Build one run object -------------------------------------------------
+| {
+    tool: { driver:
+      ({ name: $toolName, rules: $rules }
+       + (if $toolVersion != "" then { version: $toolVersion, semanticVersion: $toolVersion } else {} end)
+       + (if $toolUri != "" then { informationUri: $toolUri } else {} end))
+    },
+    automationDetails: {
+      id: (if $branch != "" then "sonarqube/\($projectKey)/\($branch)/"
+           else "sonarqube/\($projectKey)/" end)
+    },
+    properties:
+      ({ sonarUrl: $sonarUrl, sonarCloud: $sonarCloud }
+       + (if $analysisId != ""   then { sonarAnalysisId: $analysisId } else {} end)
+       + (if $branch != ""       then { branch: $branch } else {} end)
+       + (if $organization != "" then { organization: $organization } else {} end)
+       + (if ($root.metadata.filtersApplied // null) != null
+          then { filtersApplied: $root.metadata.filtersApplied } else {} end)),
+    results: $results
+  };
+
 # --- Assemble the SARIF document ------------------------------------------
+# Portfolio: one run per project. Single project: one run from the root.
+( if (.metadata.reportType // "") == "portfolio"
+  then [ .portfolio.projects[]? ]
+  else [ . ] end ) as $roots
 | {
     "$schema": "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json",
     version: "2.1.0",
-    runs: [
-      {
-        tool: { driver:
-          ({ name: $toolName, rules: $rules }
-           + (if $toolVersion != "" then { version: $toolVersion, semanticVersion: $toolVersion } else {} end)
-           + (if $toolUri != "" then { informationUri: $toolUri } else {} end))
-        },
-        automationDetails: {
-          id: (if $branch != "" then "sonarqube/\($projectKey)/\($branch)/"
-               else "sonarqube/\($projectKey)/" end)
-        },
-        properties:
-          ({ sonarUrl: $sonarUrl, sonarCloud: $sonarCloud }
-           + (if $analysisId != ""   then { sonarAnalysisId: $analysisId } else {} end)
-           + (if $branch != ""       then { branch: $branch } else {} end)
-           + (if $organization != "" then { organization: $organization } else {} end)
-           + (if ($root.metadata.filtersApplied // null) != null
-              then { filtersApplied: $root.metadata.filtersApplied } else {} end)),
-        results: $results
-      }
-    ]
+    runs: [ $roots[] | build_run(.) ]
   }

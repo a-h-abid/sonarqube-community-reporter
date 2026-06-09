@@ -1,0 +1,233 @@
+{
+  "metadata": {
+    "reportType": "portfolio",
+    "reportDate": "2024-06-09T00:00:00Z",
+    "sonarUrl": "http://sonar.example.com",
+    "sonarCloud": false,
+    "organization": "acme-org",
+    "branch": "main",
+    "projectCount": 2,
+    "projectKeys": [
+      "proj-a",
+      "proj-b"
+    ]
+  },
+  "portfolio": {
+    "totals": {
+      "bugs": 11,
+      "vulnerabilities": 5,
+      "code_smells": 120,
+      "ncloc": 4000,
+      "sqale_index": 660,
+      "issues": {
+        "total": 136,
+        "byType": {
+          "BUG": 11,
+          "VULNERABILITY": 5,
+          "CODE_SMELL": 120
+        },
+        "bySeverity": {
+          "BLOCKER": 4,
+          "CRITICAL": 7,
+          "MAJOR": 35,
+          "MINOR": 60,
+          "INFO": 30
+        }
+      },
+      "hotspots": {
+        "total": 10,
+        "toReview": 5,
+        "reviewed": 5
+      },
+      "gatesPassed": 1,
+      "gatesFailed": 1,
+      "gatesOther": 0
+    },
+    "aggregates": {
+      "coverage": 77.5,
+      "duplicated_lines_density": 3.3
+    },
+    "worstOffenders": [
+      {
+        "projectKey": "proj-a",
+        "projectName": "Project A",
+        "gateStatus": "ERROR",
+        "blockerCritical": 10,
+        "totalIssues": 115
+      },
+      {
+        "projectKey": "proj-b",
+        "projectName": "Project B",
+        "gateStatus": "OK",
+        "blockerCritical": 1,
+        "totalIssues": 21
+      }
+    ],
+    "projects": [
+      {
+        "metadata": {
+          "projectKey": "proj-a",
+          "projectName": "Project A",
+          "branch": "main",
+          "sonarUrl": "http://sonar.example.com",
+          "reportDate": "2024-01-15T10:00:00Z",
+          "lastAnalysisDate": "2024-01-14T09:30:00+0000",
+          "analysisId": "A1",
+          "sonarCloud": false,
+          "organization": ""
+        },
+        "qualityGate": {
+          "status": "ERROR",
+          "conditions": [
+            {
+              "metric": "coverage",
+              "status": "ERROR",
+              "actualValue": "40.0",
+              "errorThreshold": "80",
+              "comparator": "LT"
+            }
+          ]
+        },
+        "measures": {
+          "bugs": "10",
+          "vulnerabilities": "5",
+          "code_smells": "100",
+          "coverage": "40.0",
+          "duplicated_lines_density": "10.0",
+          "ncloc": "1000",
+          "sqale_index": "600",
+          "reliability_rating": "4.0",
+          "security_rating": "3.0",
+          "sqale_rating": "2.0",
+          "security_hotspots_reviewed": "50",
+          "security_review_rating": "3.0"
+        },
+        "issuesSummary": {
+          "total": 115,
+          "byType": {
+            "BUG": 10,
+            "VULNERABILITY": 5,
+            "CODE_SMELL": 100
+          },
+          "bySeverity": {
+            "BLOCKER": 4,
+            "CRITICAL": 6,
+            "MAJOR": 30,
+            "MINOR": 50,
+            "INFO": 25
+          }
+        },
+        "hotspotsSummary": {
+          "total": 8,
+          "toReview": 5,
+          "reviewed": 3
+        },
+        "hotspots": [
+          {
+            "key": "A-HS1",
+            "status": "TO_REVIEW",
+            "vulnerabilityProbability": "HIGH",
+            "securityCategory": "sql-injection",
+            "message": "SQLi in A",
+            "component": "proj-a:src/Db.java",
+            "line": 21,
+            "rule": "java:S3649",
+            "author": "dev1",
+            "creationDate": "2024-01-15T09:00:00+0000",
+            "updateDate": "2024-01-15T09:00:00+0000"
+          }
+        ],
+        "issues": [
+          {
+            "key": "A1",
+            "severity": "BLOCKER",
+            "type": "BUG",
+            "message": "NPE in A",
+            "component": "proj-a:src/Main.java",
+            "line": 42,
+            "startLine": 42,
+            "endLine": 42,
+            "rule": "java:S2259",
+            "effort": "30min",
+            "creationDate": "2024-01-15T10:00:00+0000"
+          }
+        ]
+      },
+      {
+        "metadata": {
+          "projectKey": "proj-b",
+          "projectName": "Project B",
+          "branch": "main",
+          "sonarUrl": "http://sonar.example.com",
+          "reportDate": "2024-01-15T10:00:00Z",
+          "lastAnalysisDate": "2024-01-14T09:30:00+0000",
+          "analysisId": "B1",
+          "sonarCloud": false,
+          "organization": ""
+        },
+        "qualityGate": {
+          "status": "OK",
+          "conditions": [
+            {
+              "metric": "coverage",
+              "status": "OK",
+              "actualValue": "90.0",
+              "errorThreshold": "80",
+              "comparator": "LT"
+            }
+          ]
+        },
+        "measures": {
+          "bugs": "1",
+          "vulnerabilities": "0",
+          "code_smells": "20",
+          "coverage": "90.0",
+          "duplicated_lines_density": "1.0",
+          "ncloc": "3000",
+          "sqale_index": "60",
+          "reliability_rating": "1.0",
+          "security_rating": "1.0",
+          "sqale_rating": "1.0",
+          "security_hotspots_reviewed": "100",
+          "security_review_rating": "1.0"
+        },
+        "issuesSummary": {
+          "total": 21,
+          "byType": {
+            "BUG": 1,
+            "VULNERABILITY": 0,
+            "CODE_SMELL": 20
+          },
+          "bySeverity": {
+            "BLOCKER": 0,
+            "CRITICAL": 1,
+            "MAJOR": 5,
+            "MINOR": 10,
+            "INFO": 5
+          }
+        },
+        "hotspotsSummary": {
+          "total": 2,
+          "toReview": 0,
+          "reviewed": 2
+        },
+        "hotspots": [],
+        "issues": [
+          {
+            "key": "B1",
+            "severity": "CRITICAL",
+            "type": "BUG",
+            "message": "Bug in B",
+            "component": "proj-b:src/Svc.java",
+            "line": 10,
+            "startLine": 10,
+            "endLine": 10,
+            "rule": "java:S1234",
+            "effort": "10min",
+            "creationDate": "2024-01-15T10:00:00+0000"
+          }
+        ]
+      }
+    ]
+  }
+}

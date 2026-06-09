@@ -1527,3 +1527,102 @@ TPL
   [ "$(jq '.runs[0].results | length' "$f")" -eq 0 ]
   rm -f "$data"
 }
+
+# ===========================================================================
+# Portfolio (multi-project) report generation
+#
+# Uses the pre-aggregated portfolio fixture (metadata.reportType == portfolio)
+# so each generator's portfolio branch is exercised without a live fetch.
+# ===========================================================================
+
+_portfolio_fixture() { echo "${REPO_ROOT}/tests/fixtures/portfolio_data.json"; }
+
+@test "portfolio json: passthrough keeps the portfolio shape and uses a portfolio filename" {
+  run generate_json_report "$(_portfolio_fixture)" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  [[ "$(basename "$f")" == portfolio_* ]]
+  [ "$(jq -r '.metadata.reportType' "$f")" = "portfolio" ]
+  [ "$(jq -r '.portfolio.projects | length' "$f")" -eq 2 ]
+}
+
+@test "portfolio md: renders roll-up sections and per-project comparison" {
+  run generate_md_report "$(_portfolio_fixture)" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  [[ "$(basename "$f")" == portfolio_*.md ]]
+  grep -q "# Portfolio Analysis Report" "$f"
+  grep -q "## Worst Offenders" "$f"
+  grep -q "## Per-Project Comparison" "$f"
+  grep -q "Project A" "$f"
+  grep -q "Weighted Coverage" "$f"
+}
+
+@test "portfolio html: renders portfolio template with no leftover placeholders" {
+  run generate_html_report "$(_portfolio_fixture)" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  [[ "$(basename "$f")" == portfolio_*.html ]]
+  grep -q "SonarQube Portfolio Report" "$f"
+  grep -q "Worst Offenders" "$f"
+  grep -q "qg-fail" "$f"
+  grep -q "acme-org" "$f"
+  ! grep -qE '\{\{[A-Z_]+\}\}' "$f"
+}
+
+@test "portfolio html: honors a custom HTML_TEMPLATE override" {
+  local tpl="$_OUTPUT_DIR/custom-portfolio.tpl"
+  printf 'CUSTOM %s %s' '{{PROJECT_COUNT}}' '{{WORST_OFFENDERS_TABLE}}' > "$tpl"
+  HTML_TEMPLATE="$tpl" run generate_html_report "$(_portfolio_fixture)" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  grep -q "CUSTOM 2" "${lines[-1]}"
+  HTML_TEMPLATE=""
+}
+
+@test "portfolio html: errors when the template file is missing" {
+  HTML_TEMPLATE="/no/such/portfolio-xyz.tpl" run generate_html_report "$(_portfolio_fixture)" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"template not found"* ]]
+  HTML_TEMPLATE=""
+}
+
+@test "portfolio md: errors when the output cannot be written" {
+  local badfile="$_OUTPUT_DIR/not-a-dir"; : > "$badfile"
+  run generate_md_report "$(_portfolio_fixture)" "$badfile"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to generate portfolio Markdown report"* ]]
+}
+
+@test "portfolio sarif: emits one run per project" {
+  run generate_sarif_report "$(_portfolio_fixture)" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local f="${lines[-1]}"
+  [ "$(jq '.runs | length' "$f")" -eq 2 ]
+  [ "$(jq -r '.runs[0].automationDetails.id' "$f")" = "sonarqube/proj-a/main/" ]
+}
+
+@test "portfolio sarif: errors when the output cannot be written" {
+  local badfile="$_OUTPUT_DIR/not-a-dir-s"; : > "$badfile"
+  run generate_sarif_report "$(_portfolio_fixture)" "$badfile"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"Failed to generate SARIF report"* ]]
+}
+
+@test "portfolio csv: emits summary, comparison, worst, issues, hotspots files" {
+  run generate_csv_report "$(_portfolio_fixture)" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ -n "$(find "$_OUTPUT_DIR" -name 'portfolio_*_comparison.csv')" ]
+  [ -n "$(find "$_OUTPUT_DIR" -name 'portfolio_*_worst_offenders.csv')" ]
+  local issues_csv
+  issues_csv=$(find "$_OUTPUT_DIR" -name 'portfolio_*_issues.csv')
+  head -1 "$issues_csv" | grep -q '"Project"'
+}
+
+@test "portfolio xlsx: builds a five-sheet workbook via ssconvert" {
+  if ! command -v ssconvert &>/dev/null; then
+    skip "ssconvert is not installed"
+  fi
+  run generate_xlsx_report "$(_portfolio_fixture)" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ -n "$(find "$_OUTPUT_DIR" -name 'portfolio_*.xlsx')" ]
+}

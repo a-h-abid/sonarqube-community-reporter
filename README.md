@@ -7,6 +7,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 ## Features
 
 - **Multi-format reports** — JSON, Markdown, HTML (styled), PDF, XLSX, ODS, CSV, and SARIF 2.1 (GitHub code scanning) with project metadata including report date, last analysis datetime, and analysis ID
+- **Portfolio / multi-project aggregation** — Pass several `--project-key`s (repeated flags or a comma-separated list) to get one rolled-up report: org-wide totals, ncloc-weighted coverage, a per-project comparison table, and a "worst offenders" ranking — across every output format (multi-run SARIF, combined CSV/spreadsheet sheets, per-project drill-down). SonarQube's Portfolios are Enterprise-only; this brings the core idea to the community edition
 - **All key metrics** — Quality Gate, bugs, vulnerabilities, code smells, coverage, duplications, technical debt, security hotspots, ratings (A–E)
 - **New Code Period** — Track metrics on newly added code
 - **Issues Details** — Lists all open issues with severity, type, rule, file/line details, and effort

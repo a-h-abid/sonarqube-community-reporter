@@ -10,7 +10,10 @@
 Options:
   --url URL              SonarQube base URL         (env: SONAR_URL)
   --token TOKEN          Authentication token       (env: SONAR_TOKEN)
-  --project-key KEY      Project key                (env: SONAR_PROJECT_KEY)
+  --project-key KEY      Project key. Repeat the flag or pass a comma-separated
+                         list to roll several projects into one portfolio
+                         report.                    (env: SONAR_PROJECT_KEY)
+  --project-keys LIST    Alias for --project-key (comma-separated list).
   --branch BRANCH        Branch name (optional)     (env: SONAR_BRANCH)
   --task-id ID           CE task ID to poll         (env: SONAR_TASK_ID)
   --formats FMT          Comma-separated formats    (env: REPORT_FORMATS)
@@ -298,6 +301,38 @@ Example — show only the 10 most severe bugs and vulnerabilities at MAJOR or ab
 ```
 
 **Scope.** Filters apply to issues only — **security hotspots are never filtered** (they have no severity/type). Summary counts (totals by type and severity) always reflect the **full project**; only the detail lists shrink. When any filter is active, every format renders a "filters applied" note so readers know the detail is a subset, and the SARIF run records a machine-readable `filtersApplied` property.
+
+## Portfolio / Multi-Project Aggregation
+
+Pass more than one project key — either by repeating `--project-key` or with a comma-separated list — to produce a single **portfolio** report that rolls every project up together:
+
+```bash
+# Repeated flags
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 --token YOUR_TOKEN \
+  --project-key service-a --project-key service-b --project-key service-c \
+  --formats html,md,csv,sarif
+
+# Comma-separated list (equivalent)
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 --token YOUR_TOKEN \
+  --project-key "service-a,service-b,service-c" \
+  --formats html
+```
+
+A portfolio report contains:
+
+- **Organization totals** — summed bugs, vulnerabilities, code smells, issues (by type and severity), hotspots, lines of code, and technical debt, plus **ncloc-weighted** average coverage and duplication.
+- **Quality gate roll-up** — how many projects passed / failed.
+- **Worst offenders** — projects ranked by failed quality gate first, then Blocker+Critical issue count, then total issues.
+- **Per-project comparison** — one row per project (gate, bugs, vulns, smells, coverage, duplication, LOC).
+- **Per-project drill-down** — each project's full issue and hotspot detail.
+
+Every format participates: HTML/Markdown gain comparison and worst-offender tables plus per-project sections; CSV emits `portfolio_{timestamp}_{summary,comparison,worst_offenders,issues,hotspots}.csv` (the issue/hotspot files carry a leading `Project` column); XLSX/ODS get five sheets (Portfolio Summary, Project Comparison, Worst Offenders, Issues Details, Hotspots Details); SARIF emits one `runs[]` entry per project. Output files are named `portfolio_{timestamp}.*`.
+
+Display filters (`--severity-threshold` / `--issue-types` / `--max-issues`) are applied per project, and `--fail-on-gate` exits 1 when **any** project's gate failed. A single project key keeps the original single-project report unchanged.
+
+> SonarQube **Portfolios** are an Enterprise-only feature; this brings the core capability to the community edition.
 
 ## CSV Export
 

@@ -18,6 +18,7 @@ setup() {
   source "${REPO_ROOT}/scripts/sonar-report.sh"
 
   REQUESTED_FORMATS=()
+  SONAR_PROJECT_KEYS=()
   REPORT_FORMATS="json"
   HTML_TEMPLATE=""
   SONAR_TOKEN=""
@@ -160,6 +161,54 @@ setup() {
 }
 
 # ===========================================================================
+# parse_args / normalize_project_keys — multi-project (portfolio) keys
+# ===========================================================================
+
+@test "parse_args: single --project-key populates the keys array" {
+  parse_args --project-key alpha
+  [ "${#SONAR_PROJECT_KEYS[@]}" -eq 1 ]
+  [ "${SONAR_PROJECT_KEYS[0]}" = "alpha" ]
+}
+
+@test "parse_args: repeated --project-key flags accumulate" {
+  parse_args --project-key alpha --project-key beta --project-key gamma
+  [ "${#SONAR_PROJECT_KEYS[@]}" -eq 3 ]
+  [ "${SONAR_PROJECT_KEYS[0]}" = "alpha" ]
+  [ "${SONAR_PROJECT_KEYS[2]}" = "gamma" ]
+}
+
+@test "parse_args: comma-separated --project-key splits into the array" {
+  parse_args --project-key "alpha, beta ,gamma"
+  [ "${#SONAR_PROJECT_KEYS[@]}" -eq 3 ]
+  [ "${SONAR_PROJECT_KEYS[1]}" = "beta" ]
+}
+
+@test "parse_args: --project-keys alias and --project-key=VALUE form both work" {
+  parse_args --project-keys "alpha,beta" --project-key=gamma
+  [ "${#SONAR_PROJECT_KEYS[@]}" -eq 3 ]
+  [ "${SONAR_PROJECT_KEYS[0]}" = "alpha" ]
+  [ "${SONAR_PROJECT_KEYS[2]}" = "gamma" ]
+}
+
+@test "normalize_project_keys: seeds the array from a comma-separated scalar" {
+  SONAR_PROJECT_KEY="alpha,beta"
+  normalize_project_keys
+  [ "${#SONAR_PROJECT_KEYS[@]}" -eq 2 ]
+  [ "${SONAR_PROJECT_KEYS[0]}" = "alpha" ]
+  # Scalar collapses to the first key for single-project code paths.
+  [ "$SONAR_PROJECT_KEY" = "alpha" ]
+}
+
+@test "normalize_project_keys: CLI keys take precedence and set scalar to first" {
+  SONAR_PROJECT_KEY="from-env"
+  parse_args --project-key cli-a --project-key cli-b
+  normalize_project_keys
+  [ "${#SONAR_PROJECT_KEYS[@]}" -eq 2 ]
+  [ "${SONAR_PROJECT_KEYS[0]}" = "cli-a" ]
+  [ "$SONAR_PROJECT_KEY" = "cli-a" ]
+}
+
+# ===========================================================================
 # parse_args — new flags
 # ===========================================================================
 
@@ -168,6 +217,17 @@ setup() {
 
   parse_args --dry-run "$dry_run_file" --project-key "p"
   [ "$DRY_RUN_FILE" = "$dry_run_file" ]
+}
+
+@test "parse_args: parses url, branch, task-id, and polling flags" {
+  parse_args --url http://x:9000 --branch feat --task-id TASK123 \
+    --no-wait --poll-interval 9 --poll-timeout 99 --project-key p
+  [ "$SONAR_URL" = "http://x:9000" ]
+  [ "$SONAR_BRANCH" = "feat" ]
+  [ "$SONAR_TASK_ID" = "TASK123" ]
+  [ "$WAIT_FOR_ANALYSIS" = "false" ]
+  [ "$POLL_INTERVAL" = "9" ]
+  [ "$POLL_TIMEOUT" = "99" ]
 }
 
 @test "parse_args: --notify-webhook sets NOTIFY_WEBHOOK" {
@@ -350,6 +410,48 @@ setup() {
   INCLUDE_CODE_SNIPPETS="0"
   validate_enrichment_flags
   [ "$INCLUDE_CODE_SNIPPETS" = "false" ]
+}
+
+@test "validate_enrichment_flags: rejects invalid INCLUDE_CODE_SNIPPETS" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="banana"
+  SNIPPET_CONTEXT="3"
+  run validate_enrichment_flags
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"INCLUDE_CODE_SNIPPETS"* ]]
+}
+
+@test "validate_enrichment_flags: rejects invalid INCLUDE_QUALITY_GATE_NAME" {
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  INCLUDE_QUALITY_GATE_NAME="perhaps"
+  run validate_enrichment_flags
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"INCLUDE_QUALITY_GATE_NAME"* ]]
+}
+
+@test "validate_enrichment_flags: rejects an unreadable HTML_TEMPLATE file" {
+  if [ "$(id -u)" -eq 0 ]; then skip "root bypasses file permission checks"; fi
+  INCLUDE_RULE_DESCRIPTIONS=""
+  INCLUDE_CODE_SNIPPETS="false"
+  SNIPPET_CONTEXT="3"
+  local tpl
+  tpl=$(mktemp)
+  echo "<html></html>" > "$tpl"
+  chmod 000 "$tpl"
+  HTML_TEMPLATE="$tpl"
+  run validate_enrichment_flags
+  chmod 644 "$tpl"; rm -f "$tpl"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"not readable"* ]]
+}
+
+@test "validate_report_formats: rejects empty REPORT_FORMATS" {
+  REPORT_FORMATS=""
+  run validate_report_formats
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"At least one"* ]]
 }
 
 @test "validate_enrichment_flags: rejects non-numeric SNIPPET_CONTEXT" {

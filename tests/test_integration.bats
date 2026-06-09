@@ -60,10 +60,12 @@ setup() {
   POLL_INTERVAL="1"; POLL_TIMEOUT="2"; ANALYSIS_ID=""; DRY_RUN_FILE=""
   NOTIFY_WEBHOOK=""; INCLUDE_RULE_DESCRIPTIONS=""; INCLUDE_CODE_SNIPPETS="false"
   SNIPPET_CONTEXT="3"; WAIT_FOR_ANALYSIS="false"; FAIL_ON_GATE="false"
-  REQUESTED_FORMATS=()
+  REQUESTED_FORMATS=(); SONAR_PROJECT_KEYS=()
+  SEVERITY_THRESHOLD=""; ISSUE_TYPES=""; MAX_ISSUES=""
 
   FIXTURE="${REPO_ROOT}/tests/fixtures/report_data.json"
   FIXTURE_ERR="${REPO_ROOT}/tests/fixtures/report_data_gate_error.json"
+  FIXTURE_PORTFOLIO="${REPO_ROOT}/tests/fixtures/portfolio_data.json"
   OUT="$(mktemp -d)"
 
   PRESENT="${_IT_FAKEBIN}:${_IT_SANDBOX}"   # report tools available (fakes)
@@ -267,6 +269,87 @@ teardown() {
   PATH="$PRESENT" run main --config "$cfg" --token t --project-key p \
     --formats json --output-dir "$OUT"
   [ "$status" -eq 0 ]
+}
+
+# ===========================================================================
+# Portfolio (multi-project) mode
+# ===========================================================================
+
+@test "main: portfolio dry-run generates rolled-up reports across formats" {
+  PATH="$PRESENT" run main --dry-run "$FIXTURE_PORTFOLIO" \
+    --formats json,md,html,csv --output-dir "$OUT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"passed across 2 projects"* ]]
+  [ -n "$(find "$OUT" -name 'portfolio_*.md')" ]
+  [ -n "$(find "$OUT" -name 'portfolio_*.html')" ]
+  [ -n "$(find "$OUT" -name 'portfolio_*_comparison.csv')" ]
+}
+
+@test "main: portfolio --fail-on-gate exits 1 when any project's gate failed" {
+  PATH="$PRESENT" run main --dry-run "$FIXTURE_PORTFOLIO" --fail-on-gate \
+    --formats json --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"FAILED"* ]]
+  [[ "$output" == *"quality gate failed"* ]]
+}
+
+@test "main: live portfolio run with repeated --project-key flags" {
+  check_connectivity() { return 0; }
+  fetch_all_metrics() {
+    case "$SONAR_PROJECT_KEY" in
+      proj-a) cat "${REPO_ROOT}/tests/fixtures/portfolio_project_a.json" ;;
+      proj-b) cat "${REPO_ROOT}/tests/fixtures/portfolio_project_b.json" ;;
+      *) return 1 ;;
+    esac
+  }
+  PATH="$PRESENT" run main --token t \
+    --project-key proj-a --project-key proj-b \
+    --formats json --output-dir "$OUT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Mode:       portfolio (2 projects)"* ]]
+  local f
+  f=$(find "$OUT" -name 'portfolio_*.json')
+  [ -n "$f" ]
+  [ "$(jq -r '.metadata.reportType' "$f")" = "portfolio" ]
+  [ "$(jq -r '.metadata.projectCount' "$f")" = "2" ]
+}
+
+@test "main: portfolio summary reports all gates passing" {
+  local allpass="$OUT/allpass.json"
+  jq '.portfolio.totals.gatesFailed = 0
+      | .portfolio.totals.gatesPassed = 2
+      | (.portfolio.projects[].qualityGate.status) = "OK"' \
+     "$FIXTURE_PORTFOLIO" > "$allpass"
+  PATH="$PRESENT" run main --dry-run "$allpass" --formats json --output-dir "$OUT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"all 2 PASSED across 2 projects"* ]]
+}
+
+@test "main: exits 1 when portfolio collection fails" {
+  check_connectivity() { return 0; }
+  fetch_all_metrics() {
+    [ "$SONAR_PROJECT_KEY" = "proj-a" ] && cat "${REPO_ROOT}/tests/fixtures/portfolio_project_a.json" || return 1
+  }
+  PATH="$PRESENT" run main --token t \
+    --project-key proj-a --project-key proj-b \
+    --formats json --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to collect portfolio data"* ]]
+}
+
+@test "main: live portfolio accepts a comma-separated --project-key list" {
+  check_connectivity() { return 0; }
+  fetch_all_metrics() {
+    case "$SONAR_PROJECT_KEY" in
+      proj-a) cat "${REPO_ROOT}/tests/fixtures/portfolio_project_a.json" ;;
+      proj-b) cat "${REPO_ROOT}/tests/fixtures/portfolio_project_b.json" ;;
+      *) return 1 ;;
+    esac
+  }
+  PATH="$PRESENT" run main --token t --project-key "proj-a,proj-b" \
+    --formats json --output-dir "$OUT"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"portfolio (2 projects)"* ]]
 }
 
 # ===========================================================================

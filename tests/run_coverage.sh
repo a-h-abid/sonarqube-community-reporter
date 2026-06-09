@@ -17,6 +17,7 @@ TEST_FILES=(
   "${SCRIPT_DIR}/test_wait_for_analysis.bats"
   "${SCRIPT_DIR}/test_main.bats"
   "${SCRIPT_DIR}/test_filtering.bats"
+  "${SCRIPT_DIR}/test_portfolio.bats"
   "${SCRIPT_DIR}/test_reports.bats"
   "${SCRIPT_DIR}/test_notify.bats"
   "${SCRIPT_DIR}/test_config.bats"

@@ -1,0 +1,9 @@
+{
+  "metadata": { "projectKey": "proj-b", "projectName": "Project B", "branch": "main", "sonarUrl": "http://sonar.example.com", "reportDate": "2024-01-15T10:00:00Z", "lastAnalysisDate": "2024-01-14T09:30:00+0000", "analysisId": "B1", "sonarCloud": false, "organization": "" },
+  "qualityGate": { "status": "OK", "conditions": [ { "metric": "coverage", "status": "OK", "actualValue": "90.0", "errorThreshold": "80", "comparator": "LT" } ] },
+  "measures": { "bugs": "1", "vulnerabilities": "0", "code_smells": "20", "coverage": "90.0", "duplicated_lines_density": "1.0", "ncloc": "3000", "sqale_index": "60", "reliability_rating": "1.0", "security_rating": "1.0", "sqale_rating": "1.0", "security_hotspots_reviewed": "100", "security_review_rating": "1.0" },
+  "issuesSummary": { "total": 21, "byType": { "BUG": 1, "VULNERABILITY": 0, "CODE_SMELL": 20 }, "bySeverity": { "BLOCKER": 0, "CRITICAL": 1, "MAJOR": 5, "MINOR": 10, "INFO": 5 } },
+  "hotspotsSummary": { "total": 2, "toReview": 0, "reviewed": 2 },
+  "hotspots": [],
+  "issues": [ { "key": "B1", "severity": "CRITICAL", "type": "BUG", "message": "Bug in B", "component": "proj-b:src/Svc.java", "line": 10, "startLine": 10, "endLine": 10, "rule": "java:S1234", "effort": "10min", "creationDate": "2024-01-15T10:00:00+0000" } ]
+}

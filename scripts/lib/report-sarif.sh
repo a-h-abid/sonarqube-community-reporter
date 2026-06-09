@@ -29,7 +29,7 @@ generate_sarif_report() {
   local output_dir="$2"
 
   local project_key
-  project_key=$(jq -r '.metadata.projectKey' "$report_data_file")
+  project_key=$(jq -r '.metadata.projectKey // .metadata.reportType // "report"' "$report_data_file")
   local timestamp
   timestamp=$(date '+%Y%m%d_%H%M%S')
   local filename="${project_key}_${timestamp}.sarif"
@@ -38,10 +38,10 @@ generate_sarif_report() {
   mkdir -p "$output_dir"
 
   # Warn about findings that cannot be anchored to a file (dropped from output).
+  # In portfolio mode the findings live under .portfolio.projects[]; otherwise
+  # they are top-level. Either way, count fileless issues/TO_REVIEW hotspots.
   local dropped
-  dropped=$(jq '[ (.issues[]?  | select((.component // "") == "")),
-                  (.hotspots[]? | select(.status == "TO_REVIEW" and (.component // "") == "")) ] | length' \
-            "$report_data_file" 2>/dev/null || echo 0)
+  dropped=$(jq '[ (.portfolio.projects[]? // .) ] | [ .[] | (.issues[]? | select((.component // "") == "")), (.hotspots[]? | select(.status == "TO_REVIEW" and (.component // "") == "")) ] | length' "$report_data_file" 2>/dev/null || echo 0)
   if [[ "${dropped:-0}" -gt 0 ]]; then
     log_warn "SARIF: skipped ${dropped} finding(s) with no file location"
   fi

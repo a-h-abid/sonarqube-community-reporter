@@ -7,7 +7,8 @@
 - `scripts/lib/api.sh`: HTTP helpers, pagination, shared logging helpers.
 - `scripts/lib/config.sh`: config parsing and safe key allowlist (`is_allowed_key`).
 - `scripts/lib/metrics.sh`: quality gate, issues, hotspots, rules, and measures collection.
-- `scripts/lib/report-*.sh`: JSON, Markdown, HTML, CSV, PDF, XLSX, and ODS generators.
+- `scripts/lib/portfolio.sh`: multi-project (portfolio) aggregation; rolls per-project report data up into one `.portfolio` node via `jq/portfolio-aggregate.jq`. Triggered when 2+ `--project-key`s are given. Generators branch on `.metadata.reportType == "portfolio"`.
+- `scripts/lib/report-*.sh`: JSON, Markdown, HTML, CSV, PDF, XLSX, ODS, and SARIF generators (each handles single-project and portfolio inputs).
 - `scripts/lib/notify.sh`: webhook delivery.
 - `scripts/lib/rule-details.sh`: optional rule description and source snippet enrichment.
 

@@ -20,7 +20,7 @@ generate_json_report() {
   local output_dir="$2"
 
   local project_key
-  project_key=$(jq -r '.metadata.projectKey' "$report_data_file")
+  project_key=$(jq -r '.metadata.projectKey // .metadata.reportType // "report"' "$report_data_file")
   local timestamp
   timestamp=$(date '+%Y%m%d_%H%M%S')
   local filename="${project_key}_${timestamp}.json"

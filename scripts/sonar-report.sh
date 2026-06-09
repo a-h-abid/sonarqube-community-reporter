@@ -10,7 +10,11 @@
 # Options:
 #   --url URL              SonarQube/SonarCloud base URL (env: SONAR_URL)
 #   --token TOKEN          Authentication token          (env: SONAR_TOKEN)
-#   --project-key KEY      Project key                  (env: SONAR_PROJECT_KEY)
+#   --project-key KEY      Project key. Repeat the flag or pass a comma-separated
+#                          list to aggregate multiple projects into one rolled-up
+#                          portfolio report.           (env: SONAR_PROJECT_KEY)
+#   --project-keys LIST    Alias for --project-key (comma-separated list).
+#                                                       (env: SONAR_PROJECT_KEY)
 #   --branch BRANCH        Branch name (optional)       (env: SONAR_BRANCH)
 #   --task-id ID           CE task ID to poll           (env: SONAR_TASK_ID)
 #   --formats FMT          Comma-separated: json,md,html,pdf,xlsx,ods,csv,sarif
@@ -117,6 +121,8 @@ source "${_MAIN_SCRIPT_DIR}/lib/report-csv.sh"
 source "${_MAIN_SCRIPT_DIR}/lib/report-sarif.sh"
 # shellcheck source=scripts/lib/filter.sh
 source "${_MAIN_SCRIPT_DIR}/lib/filter.sh"
+# shellcheck source=scripts/lib/portfolio.sh
+source "${_MAIN_SCRIPT_DIR}/lib/portfolio.sh"
 # shellcheck source=scripts/lib/notify.sh
 source "${_MAIN_SCRIPT_DIR}/lib/notify.sh"
 # shellcheck source=scripts/wait-for-analysis.sh
@@ -142,6 +148,9 @@ done
 WAIT_FOR_ANALYSIS="${WAIT_FOR_ANALYSIS:-false}"
 FAIL_ON_GATE="${FAIL_ON_GATE:-false}"
 REQUESTED_FORMATS=()
+# Accumulates every project key requested (repeated --project-key flags and/or
+# comma-separated values). 1 key → single-project report; 2+ → portfolio.
+SONAR_PROJECT_KEYS=()
 
 # ---------------------------------------------------------------------------
 # apply_defaults — Sets default values for any variable not already configured
@@ -185,12 +194,48 @@ show_help() {
   exit 0
 }
 
+# ---------------------------------------------------------------------------
+# append_project_keys <value>
+#   Splits a (possibly comma-separated) value and appends each non-empty key to
+#   the SONAR_PROJECT_KEYS array. Called once per --project-key/--project-keys
+#   flag, so repeated flags and comma lists both accumulate.
+# ---------------------------------------------------------------------------
+append_project_keys() {
+  local raw="$1"
+  local -a parts=()
+  local p
+  IFS=',' read -ra parts <<< "$raw"
+  for p in "${parts[@]}"; do
+    p="${p//[[:space:]]/}"
+    [[ -n "$p" ]] && SONAR_PROJECT_KEYS+=("$p")
+  done
+}
+
+# ---------------------------------------------------------------------------
+# normalize_project_keys
+#   Reconciles the SONAR_PROJECT_KEYS array with the SONAR_PROJECT_KEY scalar.
+#   When no key was supplied on the CLI, the scalar (from env/config/default,
+#   which may itself be a comma list) seeds the array. SONAR_PROJECT_KEY is then
+#   set to the first key so single-project code paths keep working unchanged.
+# ---------------------------------------------------------------------------
+normalize_project_keys() {
+  if [[ "${#SONAR_PROJECT_KEYS[@]}" -eq 0 ]] && [[ -n "${SONAR_PROJECT_KEY:-}" ]]; then
+    append_project_keys "$SONAR_PROJECT_KEY"
+  fi
+  if [[ "${#SONAR_PROJECT_KEYS[@]}" -gt 0 ]]; then
+    SONAR_PROJECT_KEY="${SONAR_PROJECT_KEYS[0]}"
+  fi
+}
+
 parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --url)             SONAR_URL="$2";          shift 2 ;;
       --token)           SONAR_TOKEN="$2";        shift 2 ;;
-      --project-key)     SONAR_PROJECT_KEY="$2";  shift 2 ;;
+      --project-key|--project-keys)
+        append_project_keys "$2"; shift 2 ;;
+      --project-key=*|--project-keys=*)
+        append_project_keys "${1#*=}"; shift ;;
       --branch)          SONAR_BRANCH="$2";       shift 2 ;;
       --task-id)         SONAR_TASK_ID="$2";      shift 2 ;;
       --formats)         REPORT_FORMATS="$2";     shift 2 ;;
@@ -510,6 +555,9 @@ main() {
   # Second pass: parse all arguments
   parse_args "$@"
 
+  # Fold repeated/comma project keys into SONAR_PROJECT_KEYS and seed the scalar.
+  normalize_project_keys
+
   echo ""
   echo "╔══════════════════════════════════════════════════════════════╗"
   echo "║           SonarQube Analysis Report Generator               ║"
@@ -518,16 +566,27 @@ main() {
 
   validate_params
 
-  log_info "Project:    ${SONAR_PROJECT_KEY}"
+  # Portfolio mode: 2+ project keys requested for a live (non-dry-run) run.
+  local portfolio_mode=false
+  if [[ -z "$DRY_RUN_FILE" ]] && [[ "${#SONAR_PROJECT_KEYS[@]}" -gt 1 ]]; then
+    portfolio_mode=true
+  fi
+
+  if [[ "$portfolio_mode" == "true" ]]; then
+    log_info "Projects:   ${SONAR_PROJECT_KEYS[*]}"
+    log_info "Mode:       portfolio (${#SONAR_PROJECT_KEYS[@]} projects)"
+  else
+    log_info "Project:    ${SONAR_PROJECT_KEY}"
+  fi
   log_info "Branch:     ${SONAR_BRANCH:-<default>}"
   if [[ -n "$DRY_RUN_FILE" ]]; then
     log_info "Mode:       dry-run (offline — using ${DRY_RUN_FILE})"
   elif [[ "${SONAR_CLOUD:-false}" == "true" ]]; then
-    log_info "Mode:       SonarCloud"
+    [[ "$portfolio_mode" == "true" ]] || log_info "Mode:       SonarCloud"
     log_info "URL:        ${SONAR_URL}"
     [[ -n "$SONAR_ORGANIZATION" ]] && log_info "Org:        ${SONAR_ORGANIZATION}"
   else
-    log_info "Mode:       SonarQube"
+    [[ "$portfolio_mode" == "true" ]] || log_info "Mode:       SonarQube"
     log_info "URL:        ${SONAR_URL}"
   fi
   log_info "Formats:    ${REPORT_FORMATS}"
@@ -582,19 +641,34 @@ main() {
     report_data_file=$(create_temp_file)
     _owned_report_data_file="$report_data_file"
 
-    fetch_all_metrics > "$report_data_file" || {
-      log_error "Failed to collect analysis data"
-      exit 1
-    }
+    if [[ "$portfolio_mode" == "true" ]]; then
+      # Portfolio: fetch + filter each project, then roll up. Per-project display
+      # filters are applied inside fetch_portfolio_metrics, so Step 3.5 is skipped.
+      fetch_portfolio_metrics > "$report_data_file" || {
+        log_error "Failed to collect portfolio data"
+        exit 1
+      }
+    else
+      fetch_all_metrics > "$report_data_file" || {
+        log_error "Failed to collect analysis data"
+        exit 1
+      }
+    fi
     echo ""
   fi
+
+  # Detect a portfolio report (live multi-key run, or a portfolio dry-run file).
+  local report_type
+  report_type=$(jq -r '.metadata.reportType // "single"' "$report_data_file" 2>/dev/null || echo "single")
 
   # --- Step 3.5: Apply display filters (issues only) ---
   # Limits what is SHOWN without changing what was fetched. Hotspots and summary
   # counts are untouched; the original (unfiltered) issue list is replaced for
-  # all downstream generators by a filtered copy.
-  if [[ -n "${SEVERITY_THRESHOLD:-}" ]] || [[ -n "${ISSUE_TYPES:-}" ]] \
-     || [[ -n "${MAX_ISSUES:-}" ]]; then
+  # all downstream generators by a filtered copy. Portfolio runs filter per
+  # project during collection, so the top-level filter step is skipped for them.
+  if [[ "$report_type" != "portfolio" ]] \
+     && { [[ -n "${SEVERITY_THRESHOLD:-}" ]] || [[ -n "${ISSUE_TYPES:-}" ]] \
+     || [[ -n "${MAX_ISSUES:-}" ]]; }; then
     local filtered_file
     filtered_file=$(apply_issue_filters "$report_data_file") || {
       log_error "Failed to apply issue filters"
@@ -688,15 +762,29 @@ main() {
   # --- Step 5: Summary ---
   echo ""
   echo "────────────────────────────────────────────────────────────────"
-  local qg_status
-  qg_status=$(jq -r '.qualityGate.status // "UNKNOWN"' "$report_data_file")
-
-  if [[ "$qg_status" == "OK" ]]; then
-    log_ok "Quality Gate: PASSED ✅"
-  elif [[ "$qg_status" == "ERROR" ]]; then
-    log_error "Quality Gate: FAILED ❌"
+  # gates_failed > 0 drives both the summary line and the --fail-on-gate exit.
+  local gates_failed=0
+  if [[ "$report_type" == "portfolio" ]]; then
+    local gates_passed project_count
+    gates_passed=$(jq -r '.portfolio.totals.gatesPassed // 0' "$report_data_file")
+    gates_failed=$(jq -r '.portfolio.totals.gatesFailed // 0' "$report_data_file")
+    project_count=$(jq -r '.metadata.projectCount // 0' "$report_data_file")
+    if [[ "$gates_failed" -gt 0 ]]; then
+      log_error "Quality Gates: ${gates_failed} FAILED / ${gates_passed} passed across ${project_count} projects ❌"
+    else
+      log_ok "Quality Gates: all ${gates_passed} PASSED across ${project_count} projects ✅"
+    fi
   else
-    log_warn "Quality Gate: ${qg_status}"
+    local qg_status
+    qg_status=$(jq -r '.qualityGate.status // "UNKNOWN"' "$report_data_file")
+    if [[ "$qg_status" == "OK" ]]; then
+      log_ok "Quality Gate: PASSED ✅"
+    elif [[ "$qg_status" == "ERROR" ]]; then
+      log_error "Quality Gate: FAILED ❌"
+      gates_failed=1
+    else
+      log_warn "Quality Gate: ${qg_status}"
+    fi
   fi
 
   echo ""
@@ -719,7 +807,8 @@ main() {
   fi
 
   # --- Step 7: Exit code ---
-  if [[ "$FAIL_ON_GATE" == "true" ]] && [[ "$qg_status" == "ERROR" ]]; then
+  # In portfolio mode this fails when ANY project's gate failed.
+  if [[ "$FAIL_ON_GATE" == "true" ]] && [[ "$gates_failed" -gt 0 ]]; then
     log_error "Exiting with code 1 because quality gate failed (--fail-on-gate)"
     exit 1
   fi

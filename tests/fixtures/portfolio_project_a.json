@@ -1,0 +1,9 @@
+{
+  "metadata": { "projectKey": "proj-a", "projectName": "Project A", "branch": "main", "sonarUrl": "http://sonar.example.com", "reportDate": "2024-01-15T10:00:00Z", "lastAnalysisDate": "2024-01-14T09:30:00+0000", "analysisId": "A1", "sonarCloud": false, "organization": "" },
+  "qualityGate": { "status": "ERROR", "conditions": [ { "metric": "coverage", "status": "ERROR", "actualValue": "40.0", "errorThreshold": "80", "comparator": "LT" } ] },
+  "measures": { "bugs": "10", "vulnerabilities": "5", "code_smells": "100", "coverage": "40.0", "duplicated_lines_density": "10.0", "ncloc": "1000", "sqale_index": "600", "reliability_rating": "4.0", "security_rating": "3.0", "sqale_rating": "2.0", "security_hotspots_reviewed": "50", "security_review_rating": "3.0" },
+  "issuesSummary": { "total": 115, "byType": { "BUG": 10, "VULNERABILITY": 5, "CODE_SMELL": 100 }, "bySeverity": { "BLOCKER": 4, "CRITICAL": 6, "MAJOR": 30, "MINOR": 50, "INFO": 25 } },
+  "hotspotsSummary": { "total": 8, "toReview": 5, "reviewed": 3 },
+  "hotspots": [ { "key": "A-HS1", "status": "TO_REVIEW", "vulnerabilityProbability": "HIGH", "securityCategory": "sql-injection", "message": "SQLi in A", "component": "proj-a:src/Db.java", "line": 21, "rule": "java:S3649", "author": "dev1", "creationDate": "2024-01-15T09:00:00+0000", "updateDate": "2024-01-15T09:00:00+0000" } ],
+  "issues": [ { "key": "A1", "severity": "BLOCKER", "type": "BUG", "message": "NPE in A", "component": "proj-a:src/Main.java", "line": 42, "startLine": 42, "endLine": 42, "rule": "java:S2259", "effort": "30min", "creationDate": "2024-01-15T10:00:00+0000" } ]
+}

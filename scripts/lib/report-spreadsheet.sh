@@ -48,11 +48,30 @@ write_hotspots_csv() {
 }
 
 # ---------------------------------------------------------------------------
+# Portfolio spreadsheet sheet writers (one jq program each).
+# ---------------------------------------------------------------------------
+write_portfolio_summary_csv() {
+  jq -r -f "${_REPORT_SPREADSHEET_SCRIPT_DIR}/jq/spreadsheet-portfolio-summary.jq" "$1" > "$2" || return 1
+}
+write_portfolio_comparison_csv() {
+  jq -r -f "${_REPORT_SPREADSHEET_SCRIPT_DIR}/jq/spreadsheet-portfolio-comparison.jq" "$1" > "$2" || return 1
+}
+write_portfolio_worst_csv() {
+  jq -r -f "${_REPORT_SPREADSHEET_SCRIPT_DIR}/jq/spreadsheet-portfolio-worst.jq" "$1" > "$2" || return 1
+}
+write_portfolio_issues_csv() {
+  jq -r -f "${_REPORT_SPREADSHEET_SCRIPT_DIR}/jq/spreadsheet-portfolio-issues.jq" "$1" > "$2" || return 1
+}
+write_portfolio_hotspots_csv() {
+  jq -r -f "${_REPORT_SPREADSHEET_SCRIPT_DIR}/jq/spreadsheet-portfolio-hotspots.jq" "$1" > "$2" || return 1
+}
+
+# ---------------------------------------------------------------------------
 # generate_spreadsheet_report <report_data_file> <output_dir> <extension>
-#   Creates spreadsheet with exactly three sheets:
-#   - Overall Summary
-#   - Issues Details
-#   - Hotspots Details
+#   Creates a spreadsheet. Single-project reports get three sheets (Overall
+#   Summary, Issues Details, Hotspots Details). Portfolio reports get five
+#   (Portfolio Summary, Project Comparison, Worst Offenders, Issues Details,
+#   Hotspots Details — the detail sheets carry a leading Project column).
 # ---------------------------------------------------------------------------
 generate_spreadsheet_report() {
   local report_data_file="$1"
@@ -67,8 +86,11 @@ generate_spreadsheet_report() {
     return 0
   fi
 
+  local report_type
+  report_type=$(jq -r '.metadata.reportType // "single"' "$report_data_file")
+
   local project_key
-  project_key=$(jq -r '.metadata.projectKey' "$report_data_file")
+  project_key=$(jq -r '.metadata.projectKey // .metadata.reportType // "report"' "$report_data_file")
   local timestamp
   timestamp=$(date '+%Y%m%d_%H%M%S')
   local filepath="${output_dir}/${project_key}_${timestamp}.${extension}"
@@ -79,26 +101,46 @@ generate_spreadsheet_report() {
   tmpdir=$(create_temp_dir)
   trap '[[ -n "${tmpdir:-}" ]] && rm -rf "$tmpdir"' RETURN
 
-  local summary_csv="${tmpdir}/Overall Summary.csv"
-  local issues_csv="${tmpdir}/Issues Details.csv"
-  local hotspots_csv="${tmpdir}/Hotspots Details.csv"
+  local -a sheets=()
 
-  write_summary_csv "$report_data_file" "$summary_csv" || {
-    log_error "Failed to prepare summary sheet data"
-    return 1
-  }
+  if [[ "$report_type" == "portfolio" ]]; then
+    local p_summary="${tmpdir}/Portfolio Summary.csv"
+    local p_comparison="${tmpdir}/Project Comparison.csv"
+    local p_worst="${tmpdir}/Worst Offenders.csv"
+    local p_issues="${tmpdir}/Issues Details.csv"
+    local p_hotspots="${tmpdir}/Hotspots Details.csv"
 
-  write_issues_csv "$report_data_file" "$issues_csv" || {
-    log_error "Failed to prepare issues sheet data"
-    return 1
-  }
+    write_portfolio_summary_csv    "$report_data_file" "$p_summary"    || { log_error "Failed to prepare portfolio summary sheet"; return 1; }
+    write_portfolio_comparison_csv "$report_data_file" "$p_comparison" || { log_error "Failed to prepare comparison sheet"; return 1; }
+    write_portfolio_worst_csv      "$report_data_file" "$p_worst"      || { log_error "Failed to prepare worst-offenders sheet"; return 1; }
+    write_portfolio_issues_csv     "$report_data_file" "$p_issues"     || { log_error "Failed to prepare issues sheet"; return 1; }
+    write_portfolio_hotspots_csv   "$report_data_file" "$p_hotspots"   || { log_error "Failed to prepare hotspots sheet"; return 1; }
 
-  write_hotspots_csv "$report_data_file" "$hotspots_csv" || {
-    log_error "Failed to prepare hotspots sheet data"
-    return 1
-  }
+    sheets=("$p_summary" "$p_comparison" "$p_worst" "$p_issues" "$p_hotspots")
+  else
+    local summary_csv="${tmpdir}/Overall Summary.csv"
+    local issues_csv="${tmpdir}/Issues Details.csv"
+    local hotspots_csv="${tmpdir}/Hotspots Details.csv"
 
-  "$ssconvert_bin" --merge-to="$filepath" "$summary_csv" "$issues_csv" "$hotspots_csv" >/dev/null 2>&1 || {
+    write_summary_csv "$report_data_file" "$summary_csv" || {
+      log_error "Failed to prepare summary sheet data"
+      return 1
+    }
+
+    write_issues_csv "$report_data_file" "$issues_csv" || {
+      log_error "Failed to prepare issues sheet data"
+      return 1
+    }
+
+    write_hotspots_csv "$report_data_file" "$hotspots_csv" || {
+      log_error "Failed to prepare hotspots sheet data"
+      return 1
+    }
+
+    sheets=("$summary_csv" "$issues_csv" "$hotspots_csv")
+  fi
+
+  "$ssconvert_bin" --merge-to="$filepath" "${sheets[@]}" >/dev/null 2>&1 || {
     log_error "${ssconvert_bin} failed to generate ${extension^^} report"
     return 1
   }
