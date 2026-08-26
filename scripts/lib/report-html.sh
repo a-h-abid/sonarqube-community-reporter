@@ -144,6 +144,10 @@ generate_html_report() {
   local quality_profiles_section
   quality_profiles_section=$(echo "$report_data" | jq -r -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-quality-profiles.jq")
 
+  # Trend section — rendered only when a baseline comparison was computed.
+  local trend_section
+  trend_section=$(echo "$report_data" | jq -r -f "${_REPORT_HTML_SCRIPT_DIR}/jq/html-trend.jq")
+
   # Filters-applied note — rendered only when display filters are active.
   local filters_note
   filters_note=$(echo "$report_data" | jq -r '
@@ -243,6 +247,12 @@ generate_html_report() {
   # Replace quality profiles section (empty when the feature is disabled)
   printf '%s' "$quality_profiles_section" > "${tmpfile}.rep"
   awk -v ph="{{QUALITY_PROFILES_SECTION}}" -v cf="${tmpfile}.rep" \
+    -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
+    "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
+
+  # Replace trend section (empty when no baseline comparison was requested)
+  printf '%s' "$trend_section" > "${tmpfile}.rep"
+  awk -v ph="{{TREND_SECTION}}" -v cf="${tmpfile}.rep" \
     -f "${_REPORT_HTML_SCRIPT_DIR}/awk/replace-placeholder.awk" \
     "$tmpfile" > "${tmpfile}.tmp" && mv "${tmpfile}.tmp" "$tmpfile"
 

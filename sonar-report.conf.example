@@ -104,3 +104,11 @@ DRY_RUN_FILE=
 
 # Post a summary notification to a webhook URL after report generation
 NOTIFY_WEBHOOK=
+
+# Compare this run against a previously saved report data JSON file and add a
+# "Trend / Changes since last report" section to every report
+COMPARE_WITH=
+
+# Fail the script when the comparison shows a regression (a key metric worsened
+# or the quality gate turned to ERROR). Needs COMPARE_WITH.
+FAIL_ON_REGRESSION=false

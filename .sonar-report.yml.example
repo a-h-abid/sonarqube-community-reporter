@@ -112,3 +112,11 @@ options:
 
   # Fail the script if the quality gate status is ERROR
   fail_on_gate: false
+
+  # Compare this run against a previously saved report data JSON file and add
+  # a "Trend / Changes since last report" section to every report
+  compare_with: ""
+
+  # Fail the script when the comparison shows a regression (a key metric
+  # worsened or the quality gate turned to ERROR). Needs compare_with.
+  fail_on_regression: false

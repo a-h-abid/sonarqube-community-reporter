@@ -14,6 +14,8 @@ source "${_REPORT_JSON_SCRIPT_DIR}/api.sh"
 
 # ---------------------------------------------------------------------------
 # generate_json_report <report_data_json> <output_dir>
+#   The report data is emitted verbatim, so the `.trend` object added by
+#   --compare-with is carried into the JSON report as-is.
 # ---------------------------------------------------------------------------
 generate_json_report() {
   local report_data_file="$1"
