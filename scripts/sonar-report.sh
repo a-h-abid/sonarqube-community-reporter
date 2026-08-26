@@ -36,7 +36,7 @@
 #                          Changes since last report" section to every report
 #                                                       (env: COMPARE_WITH)
 #   --fail-on-regression   Exit 1 when the comparison shows a regression: a key
-#                          metric worsened or the quality gate turned to FAIL.
+#                          metric worsened or the quality gate turned to ERROR.
 #                          Requires --compare-with.  (env: FAIL_ON_REGRESSION)
 #   --dry-run FILE         Skip API calls; regenerate reports from a saved
 #                          report data JSON file        (env: DRY_RUN_FILE)
