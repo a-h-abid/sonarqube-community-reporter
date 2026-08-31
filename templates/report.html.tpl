@@ -413,6 +413,14 @@
       color: #7c5700;
     }
 
+    /* Trend / baseline comparison */
+    .trend-baseline { font-size: 0.85rem; color: var(--color-muted); margin: 0 0 12px; }
+    .trend-better { color: var(--color-pass); font-weight: 600; }
+    .trend-worse { color: var(--color-fail); font-weight: 600; }
+    .trend-same { color: var(--color-muted); }
+    .trend-regression { color: var(--color-fail); font-weight: 600; }
+    .trend-ok { color: var(--color-pass); font-weight: 600; }
+
     /* Footer */
     .footer { margin-top: 32px; padding-top: 12px; border-top: 1px solid var(--color-border); font-size: 0.8rem; color: var(--color-muted); text-align: center; }
 
@@ -607,6 +615,9 @@
 
   <!-- Quality Profiles (audit metadata; rendered only when enabled) -->
   {{QUALITY_PROFILES_SECTION}}
+
+  <!-- Trend / Changes since last report (rendered only with --compare-with) -->
+  {{TREND_SECTION}}
 
   <!-- Key Metrics -->
   <h2>Key Metrics</h2>

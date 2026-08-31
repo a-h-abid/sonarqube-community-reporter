@@ -15,12 +15,13 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 - **Optional enrichment** — Add rule descriptions ("Why is this an issue?" / "How to fix it") and affected code snippets to issues and hotspots (opt-in via `--include-rule-descriptions` / `--include-code-snippets`)
 - **Quality Profiles & Gate (audit)** — Optionally record which Quality Profiles and Quality Gate were applied during analysis, in all report formats (opt-in via `--include-quality-profiles` / `--include-quality-gate-name`)
 - **Issue display filters** — Limit which issues appear in reports by severity, type, or count (`--severity-threshold` / `--issue-types` / `--max-issues`) without changing what's fetched; summary counts still reflect the full project
+- **Trend / changes since last report** — Compare a run against a previously saved report-data JSON file (`--compare-with previous_report.json`) to see deltas for bugs, vulnerabilities, code smells, coverage, duplications, and technical debt, plus quality-gate changes and new-vs-fixed issue counts, rendered with up/down arrows in every format. Add `--fail-on-regression` to fail CI when anything worsens
 - **Analysis polling** — Waits for SonarQube Compute Engine to finish before fetching results
 - **Dry-run / offline mode** — Regenerate reports from a saved report data JSON file without making any API calls
 - **Webhook notifications** — Post a summary (quality gate, issue counts, report list) to any Slack, Teams, or generic incoming webhook URL after generation
 - **CI/CD ready** — GitHub Actions and GitLab CI/CD pipelines included
 - **Docker Compose** — One-command SonarQube + PostgreSQL setup
-- **Fail on gate** — Exit code 1 when quality gate fails (for CI enforcement)
+- **Fail on gate** — Exit code 1 when quality gate fails (for CI enforcement), or when the run regressed against a baseline (`--fail-on-regression`)
 
 ---
 
@@ -48,6 +49,9 @@ Project name, key, branch, report date, last analysis datetime, analysis ID, and
 
 ### Quality Gate
 Pass/fail status with all gate conditions (metric, actual value, threshold, comparator).
+
+### Trend / Changes since last report
+Only when `--compare-with` is given: previous vs current values with delta arrows for the key metrics, the quality-gate transition, and new/fixed issue counts.
 
 ### Key Metrics
 | Category | Metrics |

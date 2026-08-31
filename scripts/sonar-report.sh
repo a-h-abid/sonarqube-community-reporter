@@ -31,6 +31,13 @@
 #   --poll-interval SECS   Poll interval                (env: POLL_INTERVAL)
 #   --poll-timeout SECS    Poll timeout                 (env: POLL_TIMEOUT)
 #   --fail-on-gate         Exit 1 if quality gate failed
+#   --compare-with FILE    Compare this run against a previously saved report
+#                          data JSON file (baseline) and add a "Trend /
+#                          Changes since last report" section to every report
+#                                                       (env: COMPARE_WITH)
+#   --fail-on-regression   Exit 1 when the comparison shows a regression: a key
+#                          metric worsened or the quality gate turned to ERROR.
+#                          Requires --compare-with.  (env: FAIL_ON_REGRESSION)
 #   --dry-run FILE         Skip API calls; regenerate reports from a saved
 #                          report data JSON file        (env: DRY_RUN_FILE)
 #   --notify-webhook URL   Post a summary notification to a Slack/Teams/generic
@@ -121,6 +128,8 @@ source "${_MAIN_SCRIPT_DIR}/lib/report-csv.sh"
 source "${_MAIN_SCRIPT_DIR}/lib/report-sarif.sh"
 # shellcheck source=scripts/lib/filter.sh
 source "${_MAIN_SCRIPT_DIR}/lib/filter.sh"
+# shellcheck source=scripts/lib/trend.sh
+source "${_MAIN_SCRIPT_DIR}/lib/trend.sh"
 # shellcheck source=scripts/lib/portfolio.sh
 source "${_MAIN_SCRIPT_DIR}/lib/portfolio.sh"
 # shellcheck source=scripts/lib/notify.sh
@@ -139,7 +148,7 @@ for _var in SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_TASK_ID \
             INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT \
             INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME \
             SEVERITY_THRESHOLD ISSUE_TYPES MAX_ISSUES \
-            WAIT_FOR_ANALYSIS FAIL_ON_GATE; do
+            WAIT_FOR_ANALYSIS FAIL_ON_GATE COMPARE_WITH FAIL_ON_REGRESSION; do
   if [[ -n "${!_var:-}" ]]; then
     _ENV_SNAPSHOT_VARS="${_ENV_SNAPSHOT_VARS} ${_var}"
   fi
@@ -147,6 +156,7 @@ done
 
 WAIT_FOR_ANALYSIS="${WAIT_FOR_ANALYSIS:-false}"
 FAIL_ON_GATE="${FAIL_ON_GATE:-false}"
+FAIL_ON_REGRESSION="${FAIL_ON_REGRESSION:-false}"
 REQUESTED_FORMATS=()
 # Accumulates every project key requested (repeated --project-key flags and/or
 # comma-separated values). 1 key → single-project report; 2+ → portfolio.
@@ -182,6 +192,8 @@ apply_defaults() {
   [[ -z "${MAX_ISSUES:-}" ]]                && MAX_ISSUES=""
   [[ -z "${WAIT_FOR_ANALYSIS:-}" ]]         && WAIT_FOR_ANALYSIS="false"
   [[ -z "${FAIL_ON_GATE:-}" ]]              && FAIL_ON_GATE="false"
+  [[ -z "${COMPARE_WITH:-}" ]]              && COMPARE_WITH=""
+  [[ -z "${FAIL_ON_REGRESSION:-}" ]]        && FAIL_ON_REGRESSION="false"
 
   return 0
 }
@@ -249,6 +261,9 @@ parse_args() {
       --poll-interval)   POLL_INTERVAL="$2";      shift 2 ;;
       --poll-timeout)    POLL_TIMEOUT="$2";       shift 2 ;;
       --fail-on-gate)    FAIL_ON_GATE=true;       shift   ;;
+      --compare-with)    COMPARE_WITH="$2";       shift 2 ;;
+      --compare-with=*)  COMPARE_WITH="${1#*=}";  shift   ;;
+      --fail-on-regression) FAIL_ON_REGRESSION=true; shift ;;
       --dry-run)         DRY_RUN_FILE="$2";       shift 2 ;;
       --notify-webhook)  NOTIFY_WEBHOOK="$2";     shift 2 ;;
       --config)          shift 2 ;;  # Handled in main() before parse_args
@@ -409,6 +424,33 @@ validate_filter_flags() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# validate_trend_flags — Normalize FAIL_ON_REGRESSION and validate the baseline
+#   referenced by COMPARE_WITH (it must exist and hold report data JSON).
+#   Returns 1 on invalid input.
+# ---------------------------------------------------------------------------
+validate_trend_flags() {
+  case "${FAIL_ON_REGRESSION:-false}" in
+    true|TRUE|yes|YES|1|on|ON)      FAIL_ON_REGRESSION="true"  ;;
+    false|FALSE|no|NO|0|off|OFF|"") FAIL_ON_REGRESSION="false" ;;
+    *)
+      log_error "Invalid FAIL_ON_REGRESSION value: '${FAIL_ON_REGRESSION}'"
+      return 1
+      ;;
+  esac
+
+  if [[ -z "${COMPARE_WITH:-}" ]]; then
+    if [[ "$FAIL_ON_REGRESSION" == "true" ]]; then
+      log_warn "--fail-on-regression has no effect without --compare-with"
+    fi
+    return 0
+  fi
+
+  validate_baseline_file "$COMPARE_WITH" || return 1
+
+  return 0
+}
+
 validate_report_formats() {
   local raw_formats=()
   local normalized_formats=()
@@ -515,6 +557,10 @@ validate_params() {
     errors=$((errors + 1))
   fi
 
+  if ! validate_trend_flags; then
+    errors=$((errors + 1))
+  fi
+
   if [[ "$errors" -gt 0 ]]; then
     echo ""
     log_info "Run with --help for usage information"
@@ -603,6 +649,9 @@ main() {
   if [[ "${INCLUDE_QUALITY_GATE_NAME:-false}" == "true" ]]; then
     log_info "Quality gate name: enabled"
   fi
+  if [[ -n "${COMPARE_WITH:-}" ]]; then
+    log_info "Baseline:   ${COMPARE_WITH}"
+  fi
   echo ""
 
   # --- Step 1: Check connectivity (skipped in dry-run mode) ---
@@ -623,8 +672,10 @@ main() {
   # so it is never deleted; the filter step (below) may create a second temp.
   local _owned_report_data_file=""
   local _filtered_report_data_file=""
+  local _trend_report_data_file=""
   trap '[[ -n "${_owned_report_data_file:-}" ]] && rm -f "$_owned_report_data_file"
         [[ -n "${_filtered_report_data_file:-}" ]] && rm -f "$_filtered_report_data_file"
+        [[ -n "${_trend_report_data_file:-}" ]] && rm -f "$_trend_report_data_file"
         true' EXIT
 
   if [[ -n "$DRY_RUN_FILE" ]]; then
@@ -660,6 +711,25 @@ main() {
   # Detect a portfolio report (live multi-key run, or a portfolio dry-run file).
   local report_type
   report_type=$(jq -r '.metadata.reportType // "single"' "$report_data_file" 2>/dev/null || echo "single")
+
+  # --- Step 3.4: Compare against the baseline (optional) ---
+  # Runs before the display filters so the issue comparison sees the full issue
+  # list rather than the subset that happens to be shown.
+  if [[ -n "${COMPARE_WITH:-}" ]]; then
+    if [[ "$report_type" == "portfolio" ]]; then
+      log_warn "--compare-with is not supported for portfolio reports — skipping trend"
+    else
+      local trend_file
+      trend_file=$(apply_trend "$report_data_file" "$COMPARE_WITH") || {
+        log_error "Failed to compute trend against ${COMPARE_WITH}"
+        exit 1
+      }
+      _trend_report_data_file="$trend_file"
+      report_data_file="$trend_file"
+      log_trend_summary "$report_data_file"
+      echo ""
+    fi
+  fi
 
   # --- Step 3.5: Apply display filters (issues only) ---
   # Limits what is SHOWN without changing what was fetched. Hotspots and summary
@@ -810,6 +880,13 @@ main() {
   # In portfolio mode this fails when ANY project's gate failed.
   if [[ "$FAIL_ON_GATE" == "true" ]] && [[ "$gates_failed" -gt 0 ]]; then
     log_error "Exiting with code 1 because quality gate failed (--fail-on-gate)"
+    exit 1
+  fi
+
+  # Regression gate: a key metric worsened, or the gate turned to ERROR, versus
+  # the baseline given with --compare-with.
+  if [[ "${FAIL_ON_REGRESSION:-false}" == "true" ]] && trend_has_regression "$report_data_file"; then
+    log_error "Exiting with code 1 because the report regressed against the baseline (--fail-on-regression)"
     exit 1
   fi
 

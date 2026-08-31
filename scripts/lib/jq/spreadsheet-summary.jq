@@ -39,6 +39,20 @@
           + " - showing " + (($f.issuesShown // 0) | tostring) + " of " + (($f.issuesBeforeFilter // 0) | tostring)
           + " issues (summary reflects full project)")]
  else empty end),
+(if (.trend // null) != null
+ then (.trend as $t
+       | ["Trend / Changes since last report", ("baseline: " + ($t.baseline.file // "?"))],
+         ["Trend Quality Gate", ($t.qualityGate.previous + " -> " + $t.qualityGate.current)],
+         ($t.metrics | to_entries[]
+          | ["Trend " + .value.label,
+             (.value.indicator + " " +
+              (if .value.delta == null then "n/a"
+               elif .value.delta > 0 then "+" + (.value.delta | tostring)
+               else (.value.delta | tostring) end))]),
+         ["Trend New Issues", ($t.issues.new | tostring)],
+         ["Trend Fixed Issues", ($t.issues.fixed | tostring)],
+         ["Trend Regression", (if $t.regression then "yes" else "no" end)])
+ else empty end),
 ["Total Issues", (.issuesSummary.total // 0 | tostring)],
 ["Hotspots Total", (.hotspotsSummary.total // 0 | tostring)],
 ["Hotspots To Review", (.hotspotsSummary.toReview // 0 | tostring)],

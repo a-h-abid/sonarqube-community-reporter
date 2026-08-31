@@ -155,6 +155,8 @@ $(echo "$report_data" | jq -r '
 
 ---
 
+$(jq -r -f "${_REPORT_MD_SCRIPT_DIR}/jq/md-trend.jq" "$report_data_file")
+
 ## Overall Metrics
 
 ### Reliability

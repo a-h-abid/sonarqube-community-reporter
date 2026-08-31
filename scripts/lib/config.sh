@@ -49,7 +49,9 @@ is_allowed_key() {
     ISSUE_TYPES|\
     MAX_ISSUES|\
     WAIT_FOR_ANALYSIS|\
-    FAIL_ON_GATE)
+    FAIL_ON_GATE|\
+    COMPARE_WITH|\
+    FAIL_ON_REGRESSION)
       return 0
       ;;
     *)
@@ -168,7 +170,8 @@ parse_shell_config() {
 #     - enrichment (include_rule_descriptions, include_code_snippets, snippet_context,
 #                   include_quality_profiles, include_quality_gate_name)
 #     - filtering (severity_threshold, issue_types, max_issues)
-#     - options (fail_on_gate, dry_run_file, notify_webhook)
+#     - options (fail_on_gate, fail_on_regression, compare_with, dry_run_file,
+#                notify_webhook)
 # ---------------------------------------------------------------------------
 parse_yaml_config() {
   local file="$1"
@@ -260,6 +263,8 @@ yaml_key_to_env_var() {
     filtering.issue_types)              echo "ISSUE_TYPES" ;;
     filtering.max_issues)               echo "MAX_ISSUES" ;;
     options.fail_on_gate)               echo "FAIL_ON_GATE" ;;
+    options.compare_with)               echo "COMPARE_WITH" ;;
+    options.fail_on_regression)         echo "FAIL_ON_REGRESSION" ;;
     options.dry_run_file)               echo "DRY_RUN_FILE" ;;
     options.notify_webhook)             echo "NOTIFY_WEBHOOK" ;;
     *)                                  echo "" ;;

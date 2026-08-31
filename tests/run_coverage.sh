@@ -21,6 +21,7 @@ TEST_FILES=(
   "${SCRIPT_DIR}/test_reports.bats"
   "${SCRIPT_DIR}/test_notify.bats"
   "${SCRIPT_DIR}/test_config.bats"
+  "${SCRIPT_DIR}/test_trend.bats"
   "${SCRIPT_DIR}/test_integration.bats"
 )
 

@@ -27,6 +27,11 @@ Options:
   --poll-interval SECS   Seconds between polls      (env: POLL_INTERVAL)
   --poll-timeout SECS    Max wait time in seconds   (env: POLL_TIMEOUT)
   --fail-on-gate         Exit 1 if quality gate fails
+  --compare-with FILE    Compare this run against a previously saved report
+                         data JSON file (baseline) and add a "Trend / Changes
+                         since last report" section  (env: COMPARE_WITH)
+  --fail-on-regression   Exit 1 when the comparison shows a regression.
+                         Requires --compare-with.  (env: FAIL_ON_REGRESSION)
   --dry-run FILE         Skip API calls; use saved report data JSON
                                                     (env: DRY_RUN_FILE)
   --notify-webhook URL   Post summary to a webhook after generation
@@ -397,6 +402,50 @@ Use `--dry-run FILE` to regenerate reports from a previously saved JSON report d
 
 - `SONAR_TOKEN` and `SONAR_URL` are not required in dry-run mode
 - `SONAR_PROJECT_KEY` is auto-populated from the file's metadata if not set
+
+## Trend / Changes Since Last Report
+
+Pass `--compare-with FILE` (env: `COMPARE_WITH`, YAML: `options.compare_with`) to compare the current run against a **previously saved report-data JSON file** — any JSON report this tool produced, i.e. the same file `--dry-run` accepts. The baseline must exist, be readable, and contain valid report-data JSON; otherwise the run fails before any API call. The baseline file is never modified.
+
+```bash
+# Keep the last run as the baseline for the next one
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 \
+  --token YOUR_TOKEN \
+  --project-key my-project \
+  --formats json,md,html \
+  --compare-with ./reports/previous_report.json \
+  --fail-on-regression
+```
+
+Every generated report then carries a **Trend / Changes since last report** section (a `.trend` object in JSON, a table in Markdown/HTML, extra rows in the CSV/XLSX/ODS summary sheet). Reports are unchanged when the flag is not used.
+
+What is compared:
+
+| Signal | Regression direction |
+|--------|----------------------|
+| Bugs | higher is worse |
+| Vulnerabilities | higher is worse |
+| Code smells | higher is worse |
+| Coverage (%) | **lower** is worse |
+| Duplicated lines density (%) | higher is worse |
+| Technical debt (`sqale_index`, minutes) | higher is worse |
+| Quality gate | worse when it turns to `ERROR` |
+| Issues | new vs fixed counts, matched on issue key |
+
+Deltas are rendered as `↑` (increase), `↓` (decrease), `→` (unchanged), and `—` (not comparable, e.g. the metric is missing or `N/A` on either side). Arrows describe direction only — whether a direction is good or bad is metric-aware, so a rising coverage is an improvement while rising bugs is a regression. New issues on their own do not count as a regression; the metric that they move (bugs, vulnerabilities, code smells) does.
+
+`--fail-on-regression` (env: `FAIL_ON_REGRESSION`, YAML: `options.fail_on_regression`) exits `1` when any tracked metric worsened or the quality gate turned to `ERROR`. It is independent of `--fail-on-gate`, which only looks at the current gate status; either one failing exits `1`. Without `--compare-with` the flag warns and has no effect.
+
+YAML equivalents:
+
+```yaml
+options:
+  compare_with: ./reports/previous_report.json
+  fail_on_regression: true
+```
+
+Comparison applies to single-project reports; for a portfolio run (2+ project keys) the trend is skipped with a warning.
 
 ## Webhook Notifications
 
