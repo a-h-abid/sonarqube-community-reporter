@@ -392,6 +392,8 @@
     .sev-INFO { background: var(--color-info); }
 
     .type-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; background: #e3f2fd; color: #1565c0; }
+    .new-badge { display: inline-block; margin-left: 4px; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 700; background: #fff3e0; color: #e65100; white-space: nowrap; }
+    .new-badge-baseline { background: #f3e5f5; color: #6a1b9a; }
     .status-badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600; }
     .status-reviewed { background: #e8f5e9; color: #1b5e20; }
     .status-to-review { background: #fff3cd; color: #7c5700; }

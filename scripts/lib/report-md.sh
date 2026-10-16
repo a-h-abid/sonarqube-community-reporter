@@ -322,7 +322,9 @@ $(echo "$report_data" | jq -r --arg envMode "${INCLUDE_RULE_DESCRIPTIONS:-}" '
     else "" end;
   if (.issues | length) > 0 then
     ([.issues | to_entries[]? |
-      "### " + ((.key + 1) | tostring) + ". " + (.value.severity // "?") + " " + (.value.type // "?") + "\n" +
+      "### " + ((.key + 1) | tostring) + ". " + (.value.severity // "?") + " " + (.value.type // "?") +
+        (if .value.newCode == true then " 🆕 NEW CODE" else "" end) +
+        (if .value.newSinceBaseline == true then " 🆕 NEW SINCE BASELINE" else "" end) + "\n" +
       "- Component: " + ((.value.component // "") | component_path | escape_md_text) + "\n" +
       "- Line: " + line_display(.value) + "\n" +
       "- Effort: " + ((.value.effort // "N/A") | escape_md_text) + "\n" +

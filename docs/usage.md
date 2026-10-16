@@ -435,6 +435,10 @@ What is compared:
 
 Deltas are rendered as `↑` (increase), `↓` (decrease), `→` (unchanged), and `—` (not comparable, e.g. the metric is missing or `N/A` on either side). Arrows describe direction only — whether a direction is good or bad is metric-aware, so a rising coverage is an improvement while rising bugs is a regression. New issues on their own do not count as a regression; the metric that they move (bugs, vulnerabilities, code smells) does.
 
+Issues that are new since the baseline are tagged `newSinceBaseline: true` in the report data and marked **NEW SINCE BASELINE** in the HTML/PDF and Markdown issue lists (and in the `New Since Baseline` column of the CSV/XLSX/ODS issues sheet), so the "New Issues" count can be traced to the individual issues.
+
+Independently of `--compare-with`, every issue raised in SonarQube's new code period (the issues behind the `new_violations` / New Code Period counts) is tagged `newCode: true` and marked **NEW CODE** in the same lists (`New Code` column in spreadsheets). If the new code lookup fails, the run continues without the tag.
+
 `--fail-on-regression` (env: `FAIL_ON_REGRESSION`, YAML: `options.fail_on_regression`) exits `1` when any tracked metric worsened or the quality gate turned to `ERROR`. It is independent of `--fail-on-gate`, which only looks at the current gate status; either one failing exits `1`. Without `--compare-with` the flag warns and has no effect.
 
 YAML equivalents:

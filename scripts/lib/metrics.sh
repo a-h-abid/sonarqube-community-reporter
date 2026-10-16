@@ -179,7 +179,9 @@ fetch_hotspots_summary() {
 
 # ---------------------------------------------------------------------------
 # fetch_all_issues
-#   Fetches all unresolved issues using pagination, sorted by severity.
+#   Fetches all unresolved issues using pagination, sorted by severity, and
+#   tags each with `newCode` (true when raised in the new code period).
+#   `newCode` is omitted when the new code period lookup fails.
 #   Output: JSON array of issue objects.
 # ---------------------------------------------------------------------------
 fetch_all_issues() {
@@ -191,8 +193,23 @@ fetch_all_issues() {
   local all_issues
   all_issues=$(sonar_api_paginated "issues/search" ".issues" 20 "${params[@]}") || return 1
 
+  # Keys of the issues raised in the new code period — the ones behind the
+  # new_violations / new_* counts. Optional: degrade to no tagging on failure.
+  local new_code_keys="null"
+  local new_code_issues
+  if new_code_issues=$(sonar_api_paginated "issues/search" ".issues" 20 "${params[@]}" "inNewCodePeriod=true"); then
+    new_code_keys=$(echo "$new_code_issues" | jq -c '[.[]?.key // empty]')
+  else
+    log_warn "Failed to fetch new code period issues; issues will not be tagged as new"
+  fi
+
   # kcov-skip-start
-  echo "$all_issues" | jq '[.[]? | {
+  {
+    echo "$all_issues"
+    echo "$new_code_keys"
+  } | jq -s '
+    (if .[1] == null then null else (.[1] | map({(.): true}) | add // {}) end) as $newKeys
+    | [.[0][]? | {
     key: .key,
     severity: .severity,
     type: .type,
@@ -204,7 +221,7 @@ fetch_all_issues() {
     rule: .rule,
     effort: .effort,
     creationDate: .creationDate
-  }]'
+  } + (if $newKeys == null then {} else {newCode: ($newKeys[.key] == true)} end)]'
   # kcov-skip-end
 }
 
