@@ -221,6 +221,14 @@ trend_of() {
   [ "$(jq -r '.newKeys | join(",")' <<<"$issues")" = "NEW1,NEW2" ]
 }
 
+@test "compute_trend: tags only new issues as newSinceBaseline" {
+  mutate_current '.issues += [{"key": "NEW1"}]'
+  local out
+  out=$(compute_trend "$CURRENT" "$BASELINE")
+  [ "$(jq -r '.issues[] | select(.key=="NEW1") | .newSinceBaseline' <<<"$out")" = "true" ]
+  [ "$(jq -r '.issues[] | select(.key=="AXyz111") | .newSinceBaseline' <<<"$out")" = "false" ]
+}
+
 @test "compute_trend: counts fixed issue keys" {
   mutate_current '.issues = []'
   local issues
@@ -364,6 +372,28 @@ trend_of() {
   grep -q "| \*\*Bugs\*\* | 2 | 9 | ↑ +7 |" "$md"
   grep -q "❌ regressed" "$md"
   grep -q "Regression detected" "$md"
+  rm -f "$enriched"
+}
+
+@test "markdown and html reports: mark issues new since the baseline" {
+  # shellcheck source=../scripts/lib/report-md.sh
+  source "${REPO_ROOT}/scripts/lib/report-md.sh"
+  # shellcheck source=../scripts/lib/report-html.sh
+  source "${REPO_ROOT}/scripts/lib/report-html.sh"
+  mutate_current '.issues += [{"key": "NEW1", "severity": "MAJOR", "type": "BUG", "message": "Freshly introduced"}]'
+  local enriched
+  enriched=$(apply_trend "$CURRENT" "$BASELINE")
+
+  run generate_md_report "$enriched" "${TEST_TMP}/out"
+  [ "$status" -eq 0 ]
+  local md="${output##*$'\n'}"
+  grep -q "^### 2\. MAJOR BUG 🆕 NEW SINCE BASELINE$" "$md"
+  grep -q "^### 1\. CRITICAL BUG$" "$md"
+
+  run generate_html_report "$enriched" "${TEST_TMP}/out"
+  [ "$status" -eq 0 ]
+  local html="${output##*$'\n'}"
+  [ "$(grep -o 'NEW SINCE BASELINE</span>' "$html" | wc -l)" -eq 1 ]
   rm -f "$enriched"
 }
 

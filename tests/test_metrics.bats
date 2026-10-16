@@ -472,6 +472,35 @@ setup() {
   [ "$output" = "[]" ]
 }
 
+@test "fetch_all_issues: tags issues raised in the new code period" {
+  sonar_api_paginated() {
+    if [[ " $* " == *" inNewCodePeriod=true "* ]]; then
+      jq '[.issues[] | select(.key == "AXyz222")]' "${FIXTURES}/issues_page1.json"
+    else
+      jq '.issues' "${FIXTURES}/issues_page1.json"
+    fi
+  }
+  export -f sonar_api_paginated
+
+  run fetch_all_issues
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.[] | select(.key=="AXyz222") | .newCode')" = "true" ]
+  [ "$(echo "$output" | jq -r '.[] | select(.key=="AXyz111") | .newCode')" = "false" ]
+}
+
+@test "fetch_all_issues: omits newCode when the new code lookup fails" {
+  sonar_api_paginated() {
+    [[ " $* " == *" inNewCodePeriod=true "* ]] && return 1
+    jq '.issues' "${FIXTURES}/issues_page1.json"
+  }
+  export -f sonar_api_paginated
+
+  local out
+  out=$(fetch_all_issues 2>/dev/null)
+  [ "$(echo "$out" | jq -r '.[0].key')" = "AXyz111" ]
+  [ "$(echo "$out" | jq '[.[] | has("newCode")] | any')" = "false" ]
+}
+
 @test "fetch_all_issues: fails when paginated call fails" {
   sonar_api_paginated() { return 1; }
   export -f sonar_api_paginated

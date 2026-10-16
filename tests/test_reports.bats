@@ -633,6 +633,30 @@ teardown() {
   grep -q 'class="issue-detail-row"' "$filepath"
 }
 
+@test "generate_html_report: marks issues raised in the new code period" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.issues[0] += {newCode: true}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_html_report "$enriched" "$_OUTPUT_DIR"
+  rm -f "$enriched"
+  [ "$status" -eq 0 ]
+  local filepath="${lines[-1]}"
+  grep -q 'class="new-badge"' "$filepath"
+  grep -q '>NEW CODE</span>' "$filepath"
+}
+
+@test "generate_md_report: marks issues raised in the new code period" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.issues[0] += {newCode: true}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  run generate_md_report "$enriched" "$_OUTPUT_DIR"
+  rm -f "$enriched"
+  [ "$status" -eq 0 ]
+  grep -q "^### 1\. CRITICAL BUG 🆕 NEW CODE$" "${lines[-1]}"
+}
+
 @test "generate_html_report: renders line range when endLine > startLine in issue" {
   local enriched
   enriched=$(mktemp)
@@ -998,10 +1022,25 @@ TPL
   run write_issues_csv "$_REPORT_DATA_FILE" "$issues_csv"
   [ "$status" -eq 0 ]
 
-  # The header line must end with the new columns
-  head -1 "$issues_csv" | grep -q '"End Line","Why"$'
+  # The header line must end with the appended columns
+  head -1 "$issues_csv" | grep -q '"End Line","Why","New Code","New Since Baseline"$'
 
   rm -f "$issues_csv"
+}
+
+@test "write_issues_csv: emits New Code flag when issues are tagged" {
+  local enriched
+  enriched=$(mktemp)
+  jq '.issues[0] += {newCode: true}' "$_REPORT_DATA_FILE" > "$enriched"
+
+  local issues_csv
+  issues_csv=$(mktemp)
+  run write_issues_csv "$enriched" "$issues_csv"
+  [ "$status" -eq 0 ]
+
+  sed -n 2p "$issues_csv" | grep -q ',"Yes",""$'
+
+  rm -f "$enriched" "$issues_csv"
 }
 
 @test "write_issues_csv: emits End Line value from .endLine when present" {

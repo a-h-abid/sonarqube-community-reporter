@@ -37,6 +37,9 @@
          ] | join("")) +
          "</table></div>")
       else "" end;
+    def new_badges(v):
+      (if v.newCode == true then "<span class=\"new-badge\" title=\"Raised in the new code period\">NEW CODE</span>" else "" end) +
+      (if v.newSinceBaseline == true then "<span class=\"new-badge new-badge-baseline\" title=\"Not present in the baseline report\">NEW SINCE BASELINE</span>" else "" end);
     if (.issues | length) > 0 then
       "<div class=\"table-shell issues-shell\"><table class=\"issues-table\"><thead><tr><th>#</th><th>Severity</th><th>Type</th><th>Component</th><th>Line</th><th>Effort</th></tr></thead>" +
       ([.issues | to_entries[]? |
@@ -46,7 +49,7 @@
         (code_block(.value)) as $code |
         "<tbody class=\"issue-entry\"><tr class=\"issue-summary-row\"><td class=\"issue-index\">" + ((.key + 1) | tostring) + "</td>" +
         "<td><span class=\"sev sev-" + (.value.severity // "INFO") + "\">" + (.value.severity // "?") + "</span></td>" +
-        "<td><span class=\"type-badge\">" + (.value.type // "?") + "</span></td>" +
+        "<td><span class=\"type-badge\">" + (.value.type // "?") + "</span>" + new_badges(.value) + "</td>" +
         "<td class=\"issue-component\" title=\"" + ($component | escape_attr) + "\"><span class=\"issue-component-path\">" + ($component | component_path | escape_html) + "</span></td>" +
         "<td>" + (line_display(.value) | escape_html) + "</td>" +
         "<td>" + ((.value.effort // "N/A") | escape_html) + "</td></tr>" +

@@ -97,4 +97,10 @@ def metric_entry($name; $previous; $current; $lowerIsBetter):
     }
   }
 | . + { regression: (.qualityGate.regressed or ([.metrics[] | .regressed] | any)) }
-| $cur + { trend: . }
+| . as $trend
+| ($prevKeys | map({(.): true}) | add // {}) as $prevSet
+# Tag each issue so the detailed lists can show which ones the "New Issues"
+# count refers to.
+| $cur
+| .issues = ((.issues // []) | map(. + { newSinceBaseline: ((.key // null) as $k | $k != null and ($prevSet[$k] | not)) }))
+| . + { trend: $trend }
