@@ -42,7 +42,7 @@ generate_pdf_report() {
   mkdir -p "$output_dir"
 
   local temp_base
-  temp_base=$(create_temp_file)
+  temp_base=$(create_temp_file) || return 1
   temp_html="${temp_base}.html"
   mv "$temp_base" "$temp_html" || {
     rm -f "$temp_base"
@@ -52,6 +52,9 @@ generate_pdf_report() {
   # outer caller's scope (where $temp_html is unset) — bash RETURN traps are
   # shell-wide. Mirrors the pattern used in report-html.sh / notify.sh.
   trap '[[ -n "${temp_html:-}" ]] && rm -f "$temp_html"' RETURN
+
+  # Every step below is guarded with "|| return 1": under errexit an unguarded
+  # failure would end the subshell without running the cleanup trap above.
 
   # kcov-skip-start
   awk '
@@ -63,9 +66,23 @@ generate_pdf_report() {
       inserted=1
     }
     { print }
-  ' "$html_file" > "$temp_html"
+  ' "$html_file" > "$temp_html" || return 1
   # kcov-skip-end
   render_html="$temp_html"
+
+  # The report embeds data from the SonarQube server, so the renderer runs
+  # locked down: it may not read other local files, and the bundled template
+  # (which uses no JavaScript) is rendered with scripting off. A custom
+  # HTML_TEMPLATE is the user's own code: its directory stays readable for
+  # assets such as a logo, and its scripts are left enabled.
+  local -a access_args=(--disable-local-file-access)
+  if [[ -n "${HTML_TEMPLATE:-}" ]]; then
+    local template_dir
+    template_dir=$(cd "$(dirname "$HTML_TEMPLATE")" 2>/dev/null && pwd) || template_dir=""
+    [[ -n "$template_dir" ]] && access_args+=(--allow "$template_dir")
+  else
+    access_args+=(--disable-javascript)
+  fi
 
   wkhtmltopdf \
     --quiet \
@@ -78,8 +95,7 @@ generate_pdf_report() {
     --margin-left 10mm \
     --margin-right 10mm \
     --encoding UTF-8 \
-    --enable-local-file-access \
-    --no-stop-slow-scripts \
+    "${access_args[@]}" \
     --footer-center "Page [page] of [topage]" \
     --footer-font-size 8 \
     --footer-spacing 5 \

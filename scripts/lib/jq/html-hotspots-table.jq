@@ -1,7 +1,16 @@
+    include "html-sanitize";
     def escape_html:
-      gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+      tostring | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
     def escape_attr:
-      gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\""; "&quot;");
+      tostring | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;") | gsub("\""; "&quot;");
+    # Reduce a value to characters that are safe inside a class attribute.
+    def css_token:
+      tostring | gsub("[^A-Za-z0-9_-]"; "");
+    # Rule-description HTML is untrusted: it is only ever emitted through the
+    # allowlist sanitizer. $clean maps each distinct raw string to its sanitized
+    # form so a description shared by many findings is sanitized once.
+    def clean_html($clean):
+      if type == "string" then ($clean[.] // sanitize_html) else null end;
     def component_path:
       # Show the full path from the project root. The component key is
       # "<projectKey>:<path>"; the path is the final colon-separated segment
@@ -14,18 +23,23 @@
       if ($s != null) and ($e != null) and (($e | tonumber? // 0) > ($s | tonumber? // 0))
       then ($s | tostring) + "-" + ($e | tostring)
       else ((v.line // v.startLine // "") | tostring) end;
-    def why_html(v; m):
+    def why_html(v; m; $clean):
       if v.ruleDescription then
-        (if m == "full" then (v.ruleDescription.whyHtml // (v.ruleDescription.whyText | (. // "") | escape_html))
+        (if m == "full" then ((v.ruleDescription.whyHtml | clean_html($clean)) // (v.ruleDescription.whyText | (. // "") | escape_html))
                         else (v.ruleDescription.whyTextShort | (. // "") | escape_html)
          end)
       else "" end;
-    def how_to_fix_html(v; m):
+    def how_to_fix_html(v; m; $clean):
       if v.ruleDescription then
-        (if m == "full" then (v.ruleDescription.howToFixHtml // (v.ruleDescription.howToFixText | (. // "") | escape_html))
+        (if m == "full" then ((v.ruleDescription.howToFixHtml | clean_html($clean)) // (v.ruleDescription.howToFixText | (. // "") | escape_html))
                         else (v.ruleDescription.howToFixTextShort | (. // "") | escape_html)
          end)
       else "" end;
+    def clean_map(items; m):
+      if m == "full" then
+        [items[]? | .ruleDescription | select(type == "object") | (.whyHtml, .howToFixHtml) | select(type == "string" and . != "")]
+        | unique | map({key: ., value: sanitize_html}) | from_entries
+      else {} end;
     def code_block(v):
       if v.codeSnippet then
         (v.codeSnippet as $s |
@@ -37,18 +51,19 @@
          ] | join("")) +
          "</table></div>")
       else "" end;
+    clean_map(.hotspots; $mode) as $clean |
     if (.hotspots | length) > 0 then
       "<div class=\"table-shell hotspots-shell\"><table class=\"hotspots-table\"><thead><tr><th>#</th><th>Status</th><th>Risk</th><th>Component</th><th>Line</th></tr></thead>" +
       ([.hotspots | to_entries[]? |
         (.value.component // "") as $component |
         (.value.ruleDescription.riskText // "") as $risk |
-        (why_html(.value; $mode)) as $why |
-        (how_to_fix_html(.value; $mode)) as $fix |
+        (why_html(.value; $mode; $clean)) as $why |
+        (how_to_fix_html(.value; $mode; $clean)) as $fix |
         (code_block(.value)) as $code |
         "<tbody class=\"hotspot-entry\"><tr class=\"hotspot-summary-row\"><td class=\"hotspot-index\">" + ((.key + 1) | tostring) + "</td>" +
-        "<td><span class=\"status-badge status-" + ((.value.status // "unknown") | ascii_downcase | gsub("_"; "-")) + "\">" + (.value.status // "?") + "</span>" +
+        "<td><span class=\"status-badge status-" + ((.value.status // "unknown") | tostring | ascii_downcase | gsub("_"; "-") | css_token) + "\">" + ((.value.status // "?") | escape_html) + "</span>" +
         (if (.value.status == "REVIEWED" and ((.value.resolution // "") != ""))
-         then " <span class=\"resolution-badge resolution-" + (.value.resolution | ascii_downcase) + "\">" + .value.resolution + "</span>"
+         then " <span class=\"resolution-badge resolution-" + (.value.resolution | tostring | ascii_downcase | css_token) + "\">" + (.value.resolution | escape_html) + "</span>"
          else "" end) +
         "</td>" +
         "<td>" + ((.value.vulnerabilityProbability // "N/A") | escape_html) + "</td>" +

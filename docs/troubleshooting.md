@@ -29,6 +29,9 @@ If PDF generation fails:
 - The Docker image includes `xvfb` for headless rendering
 - On bare metal, try: `apt-get install -y wkhtmltopdf xvfb`
 - Alternatively, skip PDF: `--formats json,md,html`
+- With a custom `--html-template`, local images/CSS load only from the
+  template's own directory; a reference to any other local path is blocked
+  and fails the PDF step
 
 ## API rate limiting
 

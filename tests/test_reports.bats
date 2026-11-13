@@ -1665,3 +1665,270 @@ _portfolio_fixture() { echo "${REPO_ROOT}/tests/fixtures/portfolio_data.json"; }
   [ "$status" -eq 0 ]
   [ -n "$(find "$_OUTPUT_DIR" -name 'portfolio_*.xlsx')" ]
 }
+
+# ===========================================================================
+# HTML report — untrusted values (injection / escaping regressions)
+#   Values in the report data come from the SonarQube server or a saved JSON
+#   file. They must never be interpreted by the shell, sed, or the browser.
+# ===========================================================================
+
+# _hostile_report <jq filter> — fixture copy with the filter applied.
+_hostile_report() {
+  local f="${_OUTPUT_DIR}/hostile.json"
+  jq "$1" "$_REPORT_DATA_FILE" > "$f"
+  echo "$f"
+}
+
+@test "generate_html_report: sed/shell metacharacters in values are inert" {
+  local marker="${_OUTPUT_DIR}/PWNED"
+  local f="${_OUTPUT_DIR}/hostile.json"
+  # shellcheck disable=SC2016  # ${IFS} must reach the report data literally
+  jq --arg name "Acme|;1e touch ${marker} #" \
+     --arg branch 'x|;1etouch${IFS}'"${marker}"';#' \
+     --arg gate "OK|e touch ${marker}" \
+     '.metadata.projectName = $name | .metadata.branch = $branch | .qualityGate.status = $gate' \
+     "$_REPORT_DATA_FILE" > "$f"
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ ! -e "$marker" ]
+  grep -qF "<h1>Acme|;1e touch ${marker} #</h1>" "${lines[-1]}"
+}
+
+@test "generate_html_report: '&', '|' and backslashes in the project name render literally" {
+  local f
+  f=$(_hostile_report '.metadata.projectName = "Sales & Marketing | Core \\1 \\n"')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ -s "${lines[-1]}" ]
+  grep -qF '<h1>Sales &amp; Marketing | Core \1 \n</h1>' "${lines[-1]}"
+  ! grep -qF '{{PROJECT_NAME}}' "${lines[-1]}"
+}
+
+@test "generate_html_report: escapes HTML in scalar values" {
+  local f
+  f=$(_hostile_report '
+    .metadata.projectName = "<img src=x onerror=alert(1)>"
+    | .metadata.branch = "\"><script>alert(2)</script>"
+    | .metadata.analysisId = "<b>id</b>"')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  ! grep -qF '<img src=x' "${lines[-1]}"
+  ! grep -qF '<script>alert(2)' "${lines[-1]}"
+  ! grep -qF '<b>id</b>' "${lines[-1]}"
+  grep -qF '&lt;img src=x onerror=alert(1)&gt;' "${lines[-1]}"
+  grep -qF '&quot;&gt;&lt;script&gt;alert(2)&lt;/script&gt;' "${lines[-1]}"
+}
+
+@test "generate_html_report: escapes quality gate condition fields" {
+  local f
+  f=$(_hostile_report '
+    .qualityGate.conditions = [{
+      "metric": "<script>alert(1)</script>",
+      "status": "ERROR\" onmouseover=\"x",
+      "actualValue": "<i>1</i>",
+      "errorThreshold": "<u>2</u>"}]')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  ! grep -qF '<script>alert(1)</script>' "${lines[-1]}"
+  ! grep -qF '<i>1</i>' "${lines[-1]}"
+  ! grep -qF '<u>2</u>' "${lines[-1]}"
+  ! grep -qF 'onmouseover="x' "${lines[-1]}"
+  grep -qF 'class="cond-erroronmouseoverx"' "${lines[-1]}"
+}
+
+@test "generate_html_report: escapes issue severity/type and hotspot status/resolution" {
+  local f
+  f=$(_hostile_report '
+    .issues[0].severity = "MAJOR\"><script>alert(1)</script>"
+    | .issues[0].type = "<script>alert(2)</script>"
+    | .hotspots[0].status = "REVIEWED"
+    | .hotspots[0].resolution = "SAFE\"><script>alert(3)</script>"')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  ! grep -qF '<script>alert(' "${lines[-1]}"
+  grep -qF 'class="sev sev-MAJORscriptalert1script"' "${lines[-1]}"
+}
+
+@test "generate_html_report: placeholder-like text inside a value is not expanded" {
+  local f
+  f=$(_hostile_report '
+    .metadata.projectName = "{{BRANCH}} {{ISSUES_TABLE}}"
+    | .issues[0].message = "see {{TREND_SECTION}} and {{PROJECT_KEY}}"')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  grep -qF '<h1>{{BRANCH}} {{ISSUES_TABLE}}</h1>' "${lines[-1]}"
+  grep -qF 'see {{TREND_SECTION}} and {{PROJECT_KEY}}' "${lines[-1]}"
+}
+
+@test "generate_html_report: a non-http SonarQube URL is not turned into a link" {
+  local f
+  f=$(_hostile_report '.metadata.sonarUrl = "javascript:alert(1)//"')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  ! grep -qF 'href="javascript:' "${lines[-1]}"
+  grep -qF 'href="#/dashboard?id=' "${lines[-1]}"
+}
+
+@test "generate_html_report: full-mode rule HTML is sanitized at render time" {
+  local f
+  f=$(_hostile_report '
+    .metadata.enrichment = {"ruleDescriptions": "full", "codeSnippets": false, "snippetContext": 3}
+    | .issues[0].ruleDescription = {
+        "whyHtml": "<p onclick=\"x()\">why</p><script>alert(9)</script><img src=x onerror=alert(8)></div></td></table>",
+        "howToFixHtml": "<h2>Fix</h2><a href=\"javascript:alert(1)\">bad</a><a href=\"https://example.com/doc\">good</a>",
+        "whyText": "why", "howToFixText": "fix", "whyTextShort": "why", "howToFixTextShort": "fix"}
+    | .hotspots[0].ruleDescription = {
+        "whyHtml": "<iframe src=\"file:///etc/passwd\"></iframe><p>risk</p>",
+        "howToFixHtml": "<svg onload=alert(7)><p>fix</p>",
+        "riskText": "risk", "whyText": "why", "howToFixText": "fix"}')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local html="${lines[-1]}"
+  ! grep -qF 'alert(' "$html"
+  ! grep -qF 'onclick' "$html"
+  ! grep -qF '<img' "$html"
+  ! grep -qF '<iframe' "$html"
+  ! grep -qF '<svg' "$html"
+  ! grep -qF 'javascript:' "$html"
+  grep -qF '<div class="issue-section-body"><p>why</p></div>' "$html"
+  grep -qF '<p><strong>Fix</strong></p><a>bad</a><a href="https://example.com/doc" rel="noopener noreferrer">good</a>' "$html"
+  grep -qF '<div class="hotspot-section-body"><p>risk</p></div>' "$html"
+}
+
+@test "generate_html_report: fails on report data that is not a JSON object" {
+  local f="${_OUTPUT_DIR}/not-object.json"
+  echo '[1, 2, 3]' > "$f"
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not a JSON object"* ]]
+  [ -z "$(find "$_OUTPUT_DIR" -name '*.html')" ]
+}
+
+@test "generate_html_report: fails (no file) when a table cannot be rendered" {
+  local f
+  f=$(_hostile_report '.issues = 5')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [ -z "$(find "$_OUTPUT_DIR" -name '*.html')" ]
+}
+
+@test "generate_html_report: leaves no temp files behind" {
+  local tmp_root="${_OUTPUT_DIR}/tmp-root"
+  mkdir -p "$tmp_root"
+  SONAR_REPORT_TMP_DIR="$tmp_root" run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ -z "$(ls -A "$tmp_root")" ]
+}
+
+@test "generate_html_portfolio_report: hostile values are escaped and inert" {
+  local marker="${_OUTPUT_DIR}/PWNED"
+  local f="${_OUTPUT_DIR}/portfolio-hostile.json"
+  jq --arg date "2024|;1e touch ${marker} #" '
+    .metadata.reportDate = $date
+    | .metadata.sonarUrl = "https://sonar.example.com/\"><script>alert(1)</script>"
+    | .portfolio.projects[0].issues[0].severity = "MAJOR\"><script>alert(2)</script>"
+    | .portfolio.projects[0].measures.coverage = "<script>alert(3)</script>"' \
+    "$(_portfolio_fixture)" > "$f"
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  [ ! -e "$marker" ]
+  ! grep -qF '<script>alert(' "${lines[-1]}"
+  grep -qF "2024|;1e touch ${marker} #" "${lines[-1]}"
+}
+
+# ===========================================================================
+# PDF renderer lock-down
+# ===========================================================================
+
+# Fake wkhtmltopdf that records its arguments (one per line) next to the PDF.
+_recording_wkhtmltopdf() {
+  local dir="${_OUTPUT_DIR}/recbin"
+  mkdir -p "$dir"
+  cat > "$dir/wkhtmltopdf" <<'SH'
+#!/usr/bin/env bash
+out="${@: -1}"
+printf '%s\n' "$@" > "${out}.args"
+printf '%%PDF-1.4 fake' > "$out"
+SH
+  chmod +x "$dir/wkhtmltopdf"
+  echo "$dir"
+}
+
+@test "generate_pdf_report: bundled template renders without local file access or scripts" {
+  local bin html="$_OUTPUT_DIR/in.html"
+  bin=$(_recording_wkhtmltopdf)
+  printf '<html><head></head><body>hi</body></html>' > "$html"
+  unset HTML_TEMPLATE
+  PATH="$bin:$PATH" run generate_pdf_report "$html" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local args="${lines[-1]}.args"
+  grep -qx -- '--disable-local-file-access' "$args"
+  grep -qx -- '--disable-javascript' "$args"
+  ! grep -qx -- '--enable-local-file-access' "$args"
+  ! grep -qx -- '--allow' "$args"
+}
+
+@test "generate_pdf_report: custom template may read only its own directory" {
+  local bin html="$_OUTPUT_DIR/in.html"
+  bin=$(_recording_wkhtmltopdf)
+  printf '<html><head></head><body>hi</body></html>' > "$html"
+  mkdir -p "$_OUTPUT_DIR/brand"
+  printf '<html></html>' > "$_OUTPUT_DIR/brand/custom.tpl"
+  HTML_TEMPLATE="$_OUTPUT_DIR/brand/custom.tpl" PATH="$bin:$PATH" \
+    run generate_pdf_report "$html" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local args="${lines[-1]}.args"
+  grep -qx -- '--disable-local-file-access' "$args"
+  grep -qx -- '--allow' "$args"
+  grep -qx -- "$(cd "$_OUTPUT_DIR/brand" && pwd)" "$args"
+  ! grep -qx -- '--enable-local-file-access' "$args"
+  ! grep -qx -- '--disable-javascript' "$args"
+}
+
+@test "generate_html_report: fails when the template renders to nothing" {
+  local tpl="${_OUTPUT_DIR}/empty.tpl"
+  : > "$tpl"
+  HTML_TEMPLATE="$tpl" run generate_html_report "$_REPORT_DATA_FILE" "$_OUTPUT_DIR"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Rendered HTML report is empty"* ]]
+  [ -z "$(find "$_OUTPUT_DIR" -name '*.html')" ]
+}
+
+@test "generate_html_report: table tags in a rule description stay inside its section" {
+  local f
+  f=$(_hostile_report '
+    .metadata.enrichment = {"ruleDescriptions": "full", "codeSnippets": false, "snippetContext": 3}
+    | .issues[0].ruleDescription = {
+        "whyHtml": "<td>spoofed cell</td><tr><td>spoofed row</td></tr>",
+        "howToFixHtml": "<table><table></table></table></td></tr></tbody></table>fix",
+        "whyText": "w", "howToFixText": "f", "whyTextShort": "w", "howToFixTextShort": "f"}
+    | .hotspots[0].ruleDescription = {
+        "whyHtml": "</td></tr></tbody></table><tbody><tr><td>fake hotspot</td></tr></tbody>",
+        "howToFixHtml": "<table><tr><td>ok</td></tr></table>",
+        "riskText": "r", "whyText": "w", "howToFixText": "f"}')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local html="${lines[-1]}"
+  grep -qF '<div class="issue-section-body">spoofed cellspoofed row</div>' "$html"
+  grep -qF '<div class="issue-section-body"><table></table>fix</div>' "$html"
+  grep -qF '<div class="hotspot-section-body">fake hotspot</div>' "$html"
+  grep -qF '<div class="hotspot-section-body"><table><tr><td>ok</td></tr></table></div>' "$html"
+}
+
+@test "generate_pdf_report: a failing preprocessing step cleans up its temp file under errexit" {
+  local html="$_OUTPUT_DIR/in.html" tmp_root="$_OUTPUT_DIR/tmp-root"
+  mkdir -p "$tmp_root"
+  printf '<html><head></head><body>hi</body></html>' > "$html"
+  # main() calls generators inside $(...) with inherit_errexit on; reproduce
+  # that here with an awk that fails.
+  SONAR_REPORT_TMP_DIR="$tmp_root" PATH="$_FAKE_BIN:$PATH" run bash -c '
+    set -euo pipefail
+    shopt -s inherit_errexit
+    source "$1/scripts/lib/report-pdf.sh"
+    awk() { return 1; }
+    out=$(generate_pdf_report "$2" "$3")
+  ' _ "$REPO_ROOT" "$html" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [ -z "$(ls -A "$tmp_root")" ]
+  [ -z "$(find "$_OUTPUT_DIR" -name '*.pdf')" ]
+}

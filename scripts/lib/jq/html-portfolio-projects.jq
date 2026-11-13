@@ -4,6 +4,8 @@
 # Input: a portfolio report object. Output: HTML section markup (jq -r).
 # ==============================================================================
 def esc: (. // "") | tostring | gsub("&"; "&amp;") | gsub("<"; "&lt;") | gsub(">"; "&gt;");
+# Reduce a value to characters that are safe inside a class attribute.
+def css_token: tostring | gsub("[^A-Za-z0-9_-]"; "");
 def component_path: (. // "") | split(":") | last // "";
 def gate_class:
   if   . == "OK"    then "qg-pass"
@@ -28,10 +30,10 @@ def line_display(v):
         + "<th>Severity</th><th>Type</th><th>Component</th><th>Line</th><th>Rule</th><th>Message</th>"
         + "</tr></thead><tbody>"
         + ([ .issues[] |
-            "<tr><td><span class=\"sev sev-" + ((.severity // "INFO") | esc) + "\">" + ((.severity // "?") | esc) + "</span></td>"
+            "<tr><td><span class=\"sev sev-" + ((.severity // "INFO") | css_token) + "\">" + ((.severity // "?") | esc) + "</span></td>"
             + "<td>" + ((.type // "?") | esc) + "</td>"
             + "<td><span class=\"mono\">" + ((.component // "") | component_path | esc) + "</span></td>"
-            + "<td>" + line_display(.) + "</td>"
+            + "<td>" + (line_display(.) | esc) + "</td>"
             + "<td>" + ((.rule // "") | esc) + "</td>"
             + "<td>" + ((.message // "") | esc) + "</td></tr>"
           ] | join(""))
@@ -46,7 +48,7 @@ def line_display(v):
             "<tr><td>" + ((.status // "?") | esc) + "</td>"
             + "<td>" + ((.vulnerabilityProbability // "N/A") | esc) + "</td>"
             + "<td><span class=\"mono\">" + ((.component // "") | component_path | esc) + "</span></td>"
-            + "<td>" + line_display(.) + "</td>"
+            + "<td>" + (line_display(.) | esc) + "</td>"
             + "<td>" + ((.rule // "") | esc) + "</td>"
             + "<td>" + ((.message // "") | esc) + "</td></tr>"
           ] | join(""))

@@ -605,3 +605,141 @@ setup() {
   has_cs=$(echo "$output" | jq '.[0] | has("codeSnippet")')
   [ "$has_cs" = "true" ]
 }
+
+# ===========================================================================
+# _normalize_rule_html — allowlist sanitizer (jq/html-sanitize.jq)
+#   Rule HTML comes from the server and is untrusted.
+# ===========================================================================
+
+@test "_normalize_rule_html: drops a script block in single-line input" {
+  run _normalize_rule_html <<< '<p>ok</p><script>alert(1)</script><p>after</p>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p>ok</p><p>after</p>' ]
+}
+
+@test "_normalize_rule_html: drops script and style blocks spanning lines" {
+  run _normalize_rule_html <<< $'<p>a</p><SCRIPT type="x">\nalert(1)\n</SCRIPT><style>\np{}\n</style><p>b</p>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p>a</p><p>b</p>' ]
+}
+
+@test "_normalize_rule_html: drops an unterminated script through the end" {
+  run _normalize_rule_html <<< '<p>a</p><script>alert(1)'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p>a</p>' ]
+}
+
+@test "_normalize_rule_html: strips attributes and tags that are not allowlisted" {
+  run _normalize_rule_html <<< '<p onclick="x()" style="a">hi</p><img src=x onerror=alert(1)><svg onload=alert(2)></svg><iframe src="file:///etc/passwd"></iframe>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p>hi</p>' ]
+}
+
+@test "_normalize_rule_html: keeps http(s) links only" {
+  run _normalize_rule_html <<< '<a href="https://example.com/a?b=1&amp;c=2" onclick="x()">ok</a><a href="javascript:alert(1)">js</a><a href="data:text/html,x">data</a><a href=http://x.test/y>bare</a>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<a href="https://example.com/a?b=1&amp;c=2" rel="noopener noreferrer">ok</a><a>js</a><a>data</a><a href="http://x.test/y" rel="noopener noreferrer">bare</a>' ]
+}
+
+@test "_normalize_rule_html: converts headings to bold paragraphs" {
+  run _normalize_rule_html <<< '<h2 class="t">Title</h2><p>body</p>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p><strong>Title</strong></p><p>body</p>' ]
+}
+
+@test "_normalize_rule_html: escapes a stray '<' and keeps text" {
+  run _normalize_rule_html <<< 'if a < b and c > d then <b>bold</b>'
+  [ "$status" -eq 0 ]
+  [ "$output" = 'if a &lt; b and c > d then <b>bold</b>' ]
+}
+
+@test "_normalize_rule_html: balances tags so content cannot escape its container" {
+  run _normalize_rule_html < <(printf '%s' '</div></td></table><div><ul><li>one<li>two')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<div><ul><li>one<li>two</li></li></ul></div>' ]
+}
+
+@test "_normalize_rule_html: preserves whitespace inside pre blocks" {
+  run _normalize_rule_html <<< $'<pre data-diff-id="1">int x = a &lt; b;\n  y = 2;</pre>'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'<pre>int x = a &lt; b;\n  y = 2;</pre>' ]
+}
+
+@test "_normalize_rule_html: is idempotent" {
+  local once twice
+  once=$(_normalize_rule_html <<< '<h1>H</h1><a href="https://e.test/?a=1&b=2">l</a><ul><li>a<li>b</ul> 1 < 2 <script>x</script>')
+  twice=$(_normalize_rule_html <<< "$once")
+  [ "$once" = "$twice" ]
+}
+
+@test "fetch_rule_details: whyHtml from a hostile rule is sanitized" {
+  sonar_api_get() {
+    # shellcheck disable=SC2016
+    jq -n '{rule: {descriptionSections: [
+      {key: "root_cause", content: "<p>why</p><script>alert(1)</script><img src=x onerror=alert(2)>"},
+      {key: "how_to_fix", content: "<h2>Fix</h2><a href=\"javascript:alert(3)\">x</a>"}]}}'
+  }
+  export -f sonar_api_get
+
+  run fetch_rule_details "custom:R1"
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.whyHtml')" = '<p>why</p>' ]
+  [ "$(echo "$output" | jq -r '.howToFixHtml')" = '<p><strong>Fix</strong></p><a>x</a>' ]
+}
+
+# ---------------------------------------------------------------------------
+# Table markup — descriptions are rendered inside a report table cell, where a
+# browser lets a loose <td>/<tr>/</table> close the report's own cell or table.
+# ---------------------------------------------------------------------------
+
+@test "_normalize_rule_html: drops table parts that are not inside a table" {
+  run _normalize_rule_html < <(printf '%s' '<td>cell</td><tr><th>head</th></tr><tbody><caption>cap</caption></tbody><p>after</p>')
+  [ "$status" -eq 0 ]
+  [ "$output" = 'cellheadcap<p>after</p>' ]
+}
+
+@test "_normalize_rule_html: drops stray table closers" {
+  run _normalize_rule_html < <(printf '%s' 'a</td></tr></tbody></table>b')
+  [ "$status" -eq 0 ]
+  [ "$output" = 'ab' ]
+}
+
+@test "_normalize_rule_html: keeps a well-formed table, including a nested one" {
+  local html='<table><caption>c</caption><thead><tr><th>h</th></tr></thead><tbody><tr><td>a<br>b</td><td><table><tr><td>inner</td></tr></table></td></tr></tbody></table>'
+  run _normalize_rule_html < <(printf '%s' "$html")
+  [ "$status" -eq 0 ]
+  [ "$output" = "$html" ]
+}
+
+@test "_normalize_rule_html: supplies the end tags HTML lets tables omit" {
+  run _normalize_rule_html < <(printf '%s' '<table><thead><tr><th>h<tbody><tr><td>a<td>b<tr><td>c</table>tail')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>a</td><td>b</td></tr><tr><td>c</td></tr></tbody></table>tail' ]
+}
+
+@test "_normalize_rule_html: a table opened directly inside a table is dropped" {
+  # <table><table> makes a browser close the first table, so the second
+  # </table> would close the report's own table.
+  run _normalize_rule_html < <(printf '%s' '<table><table><tr><td>x</td></tr></table></table><p>after</p>')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<table><tr><td>x</td></tr></table><p>after</p>' ]
+}
+
+@test "_normalize_rule_html: only table parts appear between table, section and row" {
+  run _normalize_rule_html < <(printf '%s' '<table><p>x</p><tr><div><br><td>y</td></div></tr></table>')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<table>x<tr><td>y</td></tr></table>' ]
+}
+
+@test "_normalize_rule_html: a cell with no open row has no place" {
+  run _normalize_rule_html < <(printf '%s' '<table><td>x</td></table>')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<table>x</table>' ]
+}
+
+@test "_normalize_rule_html: table handling is idempotent" {
+  local once twice
+  once=$(printf '%s' '<td>x</td><table><table><tr><p><td>1<h2>t<td>2<tr><td>3' | _normalize_rule_html)
+  twice=$(printf '%s' "$once" | _normalize_rule_html)
+  [ "$once" = "$twice" ]
+}

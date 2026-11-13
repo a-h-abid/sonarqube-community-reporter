@@ -18,8 +18,8 @@ def gate_class:
         "<tr><td>" + ((.key + 1) | tostring) + "</td>"
         + "<td>" + (.value.projectName | esc) + " <code>" + (.value.projectKey | esc) + "</code></td>"
         + "<td><span class=\"qg-pill " + (.value.gateStatus | gate_class) + "\">" + (.value.gateStatus | esc) + "</span></td>"
-        + "<td>" + (.value.blockerCritical | tostring) + "</td>"
-        + "<td>" + (.value.totalIssues | tostring) + "</td></tr>"
+        + "<td>" + (.value.blockerCritical | esc) + "</td>"
+        + "<td>" + (.value.totalIssues | esc) + "</td></tr>"
       ] | join(""))
     + "</tbody></table></div>"
   else "<p><em>No projects.</em></p>" end
