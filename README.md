@@ -38,6 +38,7 @@ Generate analysis reports from **SonarQube Community Edition** via the Web API. 
 | [Project Structure](docs/project-structure.md) | Repository layout |
 | [Troubleshooting](docs/troubleshooting.md) | Common issues and fixes |
 | [SonarQube API Reference](docs/api-reference.md) | Web API endpoints used by the tool |
+| [Feature Ideas](docs/feature-ideas.md) | Backlog of candidate features for later evaluation |
 
 ---
 
