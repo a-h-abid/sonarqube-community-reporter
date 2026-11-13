@@ -113,10 +113,119 @@ create_temp_dir() {
 }
 
 # ---------------------------------------------------------------------------
+# HTTP resilience + concurrency settings (read at call time, so they can be
+# set by CLI flags, environment variables, or the config file):
+#   HTTP_RETRIES          — retries after a transient failure   (default 3)
+#   HTTP_RETRY_DELAY      — base backoff seconds, doubled per retry (default 2)
+#   HTTP_CONNECT_TIMEOUT  — seconds to establish a connection   (default 10)
+#   HTTP_TIMEOUT          — seconds per request, 0 = unlimited  (default 120)
+#   CONCURRENCY           — parallel API workers; 1 = sequential (default 1
+#                           here; the CLI defaults it to 4)
+# ---------------------------------------------------------------------------
+_HTTP_RETRY_MAX_WAIT=60
+
+# http_setting <value> <default> — <value> when it is a non-negative integer.
+http_setting() {
+  if [[ "${1:-}" =~ ^[0-9]+$ ]]; then
+    echo "$1"
+  else
+    echo "$2"
+  fi
+}
+
+# concurrency_level — CONCURRENCY when it is a positive integer, otherwise 1.
+concurrency_level() {
+  if [[ "${CONCURRENCY:-}" =~ ^[1-9][0-9]*$ ]]; then
+    echo "$CONCURRENCY"
+  else
+    echo 1
+  fi
+}
+
+# ---------------------------------------------------------------------------
+# http_retry_wait <attempt> <headers_file>
+#   Seconds to sleep before retry number <attempt>: exponential backoff from
+#   HTTP_RETRY_DELAY, raised to the server's Retry-After (seconds form) when
+#   that is longer, capped at _HTTP_RETRY_MAX_WAIT.
+# ---------------------------------------------------------------------------
+http_retry_wait() {
+  local attempt="$1"
+  local headers_file="${2:-}"
+
+  local delay wait_secs
+  delay=$(http_setting "${HTTP_RETRY_DELAY:-}" 2)
+  # Clamp the exponent so a large retry count cannot overflow the shift.
+  local exponent=$((attempt - 1))
+  [[ "$exponent" -gt 10 ]] && exponent=10
+  wait_secs=$((delay * (1 << exponent)))
+
+  if [[ -n "$headers_file" && -s "$headers_file" ]]; then
+    local retry_after
+    # kcov-skip-start
+    retry_after=$(awk 'tolower($1) == "retry-after:" { v = $2 } END { gsub(/[^0-9]/, "", v); print v }' \
+      "$headers_file" 2>/dev/null) || retry_after=""
+    # kcov-skip-end
+    if [[ "$retry_after" =~ ^[0-9]+$ ]] && [[ "$retry_after" -gt "$wait_secs" ]]; then
+      wait_secs="$retry_after"
+    fi
+  fi
+
+  [[ "$wait_secs" -gt "$_HTTP_RETRY_MAX_WAIT" ]] && wait_secs="$_HTTP_RETRY_MAX_WAIT"
+  echo "$wait_secs"
+}
+
+# ---------------------------------------------------------------------------
+# run_parallel <max_jobs> <out_dir> <func> [item...]
+#   Runs "<func> <item>" for every item in background subshells, at most
+#   <max_jobs> at a time. Job N (0-based, in item order) writes its stdout to
+#   <out_dir>/N.out and gets <out_dir>/N.ok on success. Each job's stderr is
+#   buffered and replayed in item order once all jobs finish, so log output
+#   stays grouped instead of interleaving.
+#   Jobs run with CONCURRENCY=1 so nested fan-out cannot multiply the load.
+#   Returns 1 when any job failed. Jobs are subshells: variables they set
+#   (caches included) do not reach the caller — read the .out files instead.
+# ---------------------------------------------------------------------------
+run_parallel() {
+  local max_jobs="$1"
+  local out_dir="$2"
+  local func="$3"
+  shift 3
+
+  [[ "$max_jobs" =~ ^[1-9][0-9]*$ ]] || max_jobs=1
+
+  local idx=0 running=0 item
+  for item in "$@"; do
+    if [[ "$running" -ge "$max_jobs" ]]; then
+      wait -n 2>/dev/null || true
+      running=$((running - 1))
+    fi
+    (
+      CONCURRENCY=1 "$func" "$item" > "${out_dir}/${idx}.out" 2> "${out_dir}/${idx}.err" \
+        && : > "${out_dir}/${idx}.ok"
+    ) &
+    idx=$((idx + 1))
+    running=$((running + 1))
+  done
+  wait || true
+
+  local failed=0 i
+  for ((i = 0; i < idx; i++)); do
+    [[ -s "${out_dir}/${i}.err" ]] && cat "${out_dir}/${i}.err" >&2
+    [[ -f "${out_dir}/${i}.ok" ]] || failed=$((failed + 1))
+  done
+
+  [[ "$failed" -eq 0 ]]
+}
+
+# ---------------------------------------------------------------------------
 # sonar_api_get <endpoint> [extra_curl_args...]
 #   Makes an authenticated GET request to the SonarQube/SonarCloud API.
 #   Prints the JSON response body to stdout.
-#   Returns non-zero on HTTP errors (4xx/5xx).
+#   Returns non-zero on HTTP errors (4xx/5xx) and on transport failures.
+#
+#   Transient failures (connection errors, timeouts, HTTP 408/429/502/503/504)
+#   are retried up to HTTP_RETRIES times with exponential backoff. Every
+#   request is bounded by HTTP_CONNECT_TIMEOUT and HTTP_TIMEOUT.
 #
 #   When SONAR_ORGANIZATION is set the organization query parameter is
 #   appended automatically (required by most SonarCloud endpoints).
@@ -140,17 +249,53 @@ sonar_api_get() {
   local url="${SONAR_URL}/api/${endpoint}"
   local http_code body
 
-  # Use a temp file for body so we can capture HTTP status separately
+  local retries connect_timeout max_time
+  retries=$(http_setting "${HTTP_RETRIES:-}" 3)
+  connect_timeout=$(http_setting "${HTTP_CONNECT_TIMEOUT:-}" 10)
+  max_time=$(http_setting "${HTTP_TIMEOUT:-}" 120)
+
+  # Use a temp file for body so we can capture HTTP status separately. The
+  # response headers go to a sibling file (read only to honour Retry-After).
   local tmpfile
   tmpfile=$(create_temp_file)
   # Guard prevents the trap from failing when it fires in an outer caller's
   # scope (where $tmpfile is unset) due to bash RETURN traps being shell-wide.
-  trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile"' RETURN
+  trap '[[ -n "${tmpfile:-}" ]] && rm -f "$tmpfile" "${tmpfile}.hdr"' RETURN
 
-  http_code=$(curl -s -o "$tmpfile" -w '%{http_code}' \
-    -H "Authorization: Bearer ${SONAR_TOKEN}" \
-    "$@" \
-    "$url")
+  local attempt=0 curl_rc reason wait_secs
+  while true; do
+    attempt=$((attempt + 1))
+    curl_rc=0
+    : > "$tmpfile"
+    http_code=$(curl -s -o "$tmpfile" -D "${tmpfile}.hdr" -w '%{http_code}' \
+      --connect-timeout "$connect_timeout" --max-time "$max_time" \
+      -H "Authorization: Bearer ${SONAR_TOKEN}" \
+      "$@" \
+      "$url") || curl_rc=$?
+    [[ "$http_code" =~ ^[0-9]+$ ]] || http_code=0
+
+    # Transient failures only: transport errors (refused, reset, timeout, DNS)
+    # and the gateway/throttling statuses. Other 4xx/5xx are deterministic.
+    if [[ "$curl_rc" -ne 0 ]]; then
+      reason="curl exit ${curl_rc}"
+    else
+      case "$http_code" in
+        408|429|502|503|504) reason="HTTP ${http_code}" ;;
+        *) break ;;
+      esac
+    fi
+
+    [[ "$attempt" -gt "$retries" ]] && break
+
+    wait_secs=$(http_retry_wait "$attempt" "${tmpfile}.hdr")
+    log_warn "GET ${endpoint} failed (${reason}) — retry ${attempt}/${retries} in ${wait_secs}s"
+    sleep "$wait_secs"
+  done
+
+  if [[ "$curl_rc" -ne 0 ]]; then
+    log_error "Request failed (curl exit ${curl_rc}) — GET ${endpoint}"
+    return 1
+  fi
 
   body=$(cat "$tmpfile")
 

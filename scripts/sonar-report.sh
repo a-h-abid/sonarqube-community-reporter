@@ -72,6 +72,20 @@
 #   --max-issues N         Show at most N issues (highest severity kept), applied
 #                          after the severity/type filters.
 #                                                       (env: MAX_ISSUES)
+#   --concurrency N        Parallel API workers for portfolio projects and
+#                          enrichment lookups (default: 4; 1 = sequential).
+#                                                       (env: CONCURRENCY)
+#   --http-retries N       Retries for transient API failures — connection
+#                          errors, timeouts, HTTP 408/429/502/503/504
+#                          (default: 3; 0 = off)        (env: HTTP_RETRIES)
+#   --http-retry-delay SECS
+#                          Base retry backoff, doubled on each retry
+#                          (default: 2)                 (env: HTTP_RETRY_DELAY)
+#   --http-connect-timeout SECS
+#                          Connection timeout per API request (default: 10)
+#                                                       (env: HTTP_CONNECT_TIMEOUT)
+#   --http-timeout SECS    Total timeout per API request (default: 120;
+#                          0 = unlimited)               (env: HTTP_TIMEOUT)
 #   --config FILE          Load configuration from FILE (default: auto-detect
 #                          .sonar-report.yml or sonar-report.conf)
 #   -h, --help             Show this help
@@ -148,7 +162,8 @@ for _var in SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_TASK_ID \
             INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT \
             INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME \
             SEVERITY_THRESHOLD ISSUE_TYPES MAX_ISSUES \
-            WAIT_FOR_ANALYSIS FAIL_ON_GATE COMPARE_WITH FAIL_ON_REGRESSION; do
+            WAIT_FOR_ANALYSIS FAIL_ON_GATE COMPARE_WITH FAIL_ON_REGRESSION \
+            CONCURRENCY HTTP_RETRIES HTTP_RETRY_DELAY HTTP_CONNECT_TIMEOUT HTTP_TIMEOUT; do
   if [[ -n "${!_var:-}" ]]; then
     _ENV_SNAPSHOT_VARS="${_ENV_SNAPSHOT_VARS} ${_var}"
   fi
@@ -194,6 +209,11 @@ apply_defaults() {
   [[ -z "${FAIL_ON_GATE:-}" ]]              && FAIL_ON_GATE="false"
   [[ -z "${COMPARE_WITH:-}" ]]              && COMPARE_WITH=""
   [[ -z "${FAIL_ON_REGRESSION:-}" ]]        && FAIL_ON_REGRESSION="false"
+  [[ -z "${CONCURRENCY:-}" ]]               && CONCURRENCY="4"
+  [[ -z "${HTTP_RETRIES:-}" ]]              && HTTP_RETRIES="3"
+  [[ -z "${HTTP_RETRY_DELAY:-}" ]]          && HTTP_RETRY_DELAY="2"
+  [[ -z "${HTTP_CONNECT_TIMEOUT:-}" ]]      && HTTP_CONNECT_TIMEOUT="10"
+  [[ -z "${HTTP_TIMEOUT:-}" ]]              && HTTP_TIMEOUT="120"
 
   return 0
 }
@@ -282,6 +302,16 @@ parse_args() {
       --severity-threshold) SEVERITY_THRESHOLD="$2"; shift 2 ;;
       --issue-types)        ISSUE_TYPES="$2";        shift 2 ;;
       --max-issues)         MAX_ISSUES="$2";         shift 2 ;;
+      --concurrency)            CONCURRENCY="$2";            shift 2 ;;
+      --concurrency=*)          CONCURRENCY="${1#*=}";       shift   ;;
+      --http-retries)           HTTP_RETRIES="$2";           shift 2 ;;
+      --http-retries=*)         HTTP_RETRIES="${1#*=}";      shift   ;;
+      --http-retry-delay)       HTTP_RETRY_DELAY="$2";       shift 2 ;;
+      --http-retry-delay=*)     HTTP_RETRY_DELAY="${1#*=}";  shift   ;;
+      --http-connect-timeout)   HTTP_CONNECT_TIMEOUT="$2";   shift 2 ;;
+      --http-connect-timeout=*) HTTP_CONNECT_TIMEOUT="${1#*=}"; shift ;;
+      --http-timeout)           HTTP_TIMEOUT="$2";           shift 2 ;;
+      --http-timeout=*)         HTTP_TIMEOUT="${1#*=}";      shift   ;;
       -h|--help)         show_help ;;
       *)
         log_error "Unknown option: $1"
@@ -451,6 +481,44 @@ validate_trend_flags() {
   return 0
 }
 
+# ---------------------------------------------------------------------------
+# validate_http_flags — Validate the HTTP resilience and concurrency settings
+#   (CONCURRENCY, HTTP_RETRIES, HTTP_RETRY_DELAY, HTTP_CONNECT_TIMEOUT,
+#   HTTP_TIMEOUT). Exports them so parallel workers and sourced libraries see
+#   the same values. Returns 1 on invalid input.
+# ---------------------------------------------------------------------------
+validate_http_flags() {
+  CONCURRENCY="${CONCURRENCY:-4}"
+  HTTP_RETRIES="${HTTP_RETRIES:-3}"
+  HTTP_RETRY_DELAY="${HTTP_RETRY_DELAY:-2}"
+  HTTP_CONNECT_TIMEOUT="${HTTP_CONNECT_TIMEOUT:-10}"
+  HTTP_TIMEOUT="${HTTP_TIMEOUT:-120}"
+
+  if ! [[ "${CONCURRENCY:-}" =~ ^[1-9][0-9]*$ ]]; then
+    log_error "--concurrency must be a positive integer (got '${CONCURRENCY:-}')"
+    return 1
+  fi
+  if [[ "$CONCURRENCY" -gt 16 ]]; then
+    log_warn "CONCURRENCY=${CONCURRENCY} would put heavy load on the server — clamping to 16"
+    CONCURRENCY=16
+  fi
+
+  local _name
+  for _name in HTTP_RETRIES HTTP_RETRY_DELAY HTTP_TIMEOUT; do
+    if ! [[ "${!_name:-}" =~ ^[0-9]+$ ]]; then
+      log_error "${_name} must be a non-negative integer (got '${!_name:-}')"
+      return 1
+    fi
+  done
+  if ! [[ "${HTTP_CONNECT_TIMEOUT:-}" =~ ^[1-9][0-9]*$ ]]; then
+    log_error "HTTP_CONNECT_TIMEOUT must be a positive integer (got '${HTTP_CONNECT_TIMEOUT:-}')"
+    return 1
+  fi
+
+  export CONCURRENCY HTTP_RETRIES HTTP_RETRY_DELAY HTTP_CONNECT_TIMEOUT HTTP_TIMEOUT
+  return 0
+}
+
 validate_report_formats() {
   local raw_formats=()
   local normalized_formats=()
@@ -558,6 +626,10 @@ validate_params() {
   fi
 
   if ! validate_trend_flags; then
+    errors=$((errors + 1))
+  fi
+
+  if ! validate_http_flags; then
     errors=$((errors + 1))
   fi
 

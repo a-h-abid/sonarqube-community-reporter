@@ -102,6 +102,25 @@ filtering:
   # severity/type filters. Leave empty for no limit.
   max_issues: ""
 
+# --- HTTP Resilience & Concurrency -------------------------------------------
+http:
+  # Parallel API workers for portfolio projects and enrichment lookups.
+  # 1 = fully sequential. Values above 16 are clamped.
+  concurrency: 4
+
+  # Retries for transient API failures (connection errors, timeouts,
+  # HTTP 408/429/502/503/504). 0 disables retries.
+  retries: 3
+
+  # Base retry backoff in seconds, doubled on each retry (capped at 60s)
+  retry_delay: 2
+
+  # Seconds allowed to establish a connection
+  connect_timeout: 10
+
+  # Seconds allowed per API request (0 = unlimited)
+  timeout: 120
+
 # --- Additional Options ------------------------------------------------------
 options:
   # Dry-run mode: skip API calls and regenerate reports from a saved JSON file

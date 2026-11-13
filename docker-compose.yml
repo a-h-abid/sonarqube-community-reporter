@@ -19,6 +19,11 @@ services:
       POLL_TIMEOUT: ${POLL_TIMEOUT:-300}
       REPORT_FORMATS: ${REPORT_FORMATS:-json,md,html,pdf,xlsx,ods}
       REPORT_OUTPUT_DIR: /reports
+      CONCURRENCY: ${CONCURRENCY:-4}
+      HTTP_RETRIES: ${HTTP_RETRIES:-3}
+      HTTP_RETRY_DELAY: ${HTTP_RETRY_DELAY:-2}
+      HTTP_CONNECT_TIMEOUT: ${HTTP_CONNECT_TIMEOUT:-10}
+      HTTP_TIMEOUT: ${HTTP_TIMEOUT:-120}
     volumes:
       - ./reports:/reports
     networks:

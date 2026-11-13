@@ -51,7 +51,12 @@ is_allowed_key() {
     WAIT_FOR_ANALYSIS|\
     FAIL_ON_GATE|\
     COMPARE_WITH|\
-    FAIL_ON_REGRESSION)
+    FAIL_ON_REGRESSION|\
+    CONCURRENCY|\
+    HTTP_RETRIES|\
+    HTTP_RETRY_DELAY|\
+    HTTP_CONNECT_TIMEOUT|\
+    HTTP_TIMEOUT)
       return 0
       ;;
     *)
@@ -172,6 +177,7 @@ parse_shell_config() {
 #     - filtering (severity_threshold, issue_types, max_issues)
 #     - options (fail_on_gate, fail_on_regression, compare_with, dry_run_file,
 #                notify_webhook)
+#     - http (concurrency, retries, retry_delay, connect_timeout, timeout)
 # ---------------------------------------------------------------------------
 parse_yaml_config() {
   local file="$1"
@@ -267,6 +273,11 @@ yaml_key_to_env_var() {
     options.fail_on_regression)         echo "FAIL_ON_REGRESSION" ;;
     options.dry_run_file)               echo "DRY_RUN_FILE" ;;
     options.notify_webhook)             echo "NOTIFY_WEBHOOK" ;;
+    http.concurrency)                   echo "CONCURRENCY" ;;
+    http.retries)                       echo "HTTP_RETRIES" ;;
+    http.retry_delay)                   echo "HTTP_RETRY_DELAY" ;;
+    http.connect_timeout)               echo "HTTP_CONNECT_TIMEOUT" ;;
+    http.timeout)                       echo "HTTP_TIMEOUT" ;;
     *)                                  echo "" ;;
   esac
 }
