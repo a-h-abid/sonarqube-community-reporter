@@ -24,8 +24,8 @@ def gate_class:
         + "<td>" + (n(.measures.bugs) | tostring) + "</td>"
         + "<td>" + (n(.measures.vulnerabilities) | tostring) + "</td>"
         + "<td>" + (n(.measures.code_smells) | tostring) + "</td>"
-        + "<td>" + ((.measures.coverage // "N/A") | tostring) + "%</td>"
-        + "<td>" + ((.measures.duplicated_lines_density // "N/A") | tostring) + "%</td>"
+        + "<td>" + ((.measures.coverage // "N/A") | esc) + "%</td>"
+        + "<td>" + ((.measures.duplicated_lines_density // "N/A") | esc) + "%</td>"
         + "<td>" + (n(.measures.ncloc) | tostring) + "</td></tr>"
       ] | join(""))
     + "</tbody></table></div>"

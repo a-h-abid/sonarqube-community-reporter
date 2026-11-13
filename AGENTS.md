@@ -65,6 +65,9 @@ Tests must be parallel-safe: isolate mutable state in `setup()` with unique `mkt
 - Never commit secrets or tokens; use environment variables or `.env` files (`.env` is gitignored).
 - `reports/` is gitignored except `.gitkeep`; generated reports do not belong in commits.
 - Keep `templates/report.html.tpl` and `scripts/lib/report-html.sh` in sync.
+- Everything in the report data is untrusted (it comes from the SonarQube server or a saved JSON file). Never paste a value into a `sed`/`awk`/`jq` program or a shell command. In HTML, single values go through `scripts/lib/awk/render-template.awk` (which escapes them), jq-built blocks must escape every field, and rule-description HTML is only ever emitted through `sanitize_html` in `scripts/lib/jq/html-sanitize.jq`.
+- `main()` turns on `inherit_errexit` and calls each report generator as a plain `f=$(generate_…)` assignment. Do not add `|| handler` to those calls: it switches errexit off inside the generator. Inside generators, guard steps with `|| return 1`.
+- On/off settings are normalized to `true`/`false` with `normalize_bool_var` before use; an unrecognized value must be an error, never a silent `false`.
 - PDF generation depends on `wkhtmltopdf` and `xvfb`; spreadsheet generation depends on external converters. Handle missing tools gracefully.
 - `ssconvert --merge-to` names XLSX/ODS sheets from CSV filenames, including the `.csv` suffix.
 - Rule enrichment (`--include-rule-descriptions`) is optional and must degrade cleanly on API errors or insufficient permissions.

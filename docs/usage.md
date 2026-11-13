@@ -125,6 +125,22 @@ Settings are applied in the following order (highest to lowest priority):
 3. **Config file** — `sonar-report.conf` or `.sonar-report.yml`
 4. **Built-in defaults**
 
+A config file value replaces a built-in default (for example
+`options.fail_on_gate: true`); it is only ignored when the same setting is
+present in the environment or on the command line.
+
+**On/off settings** (`FAIL_ON_GATE`, `FAIL_ON_REGRESSION`, `WAIT_FOR_ANALYSIS`,
+`SONAR_CLOUD`, `INCLUDE_CODE_SNIPPETS`, `INCLUDE_QUALITY_PROFILES`,
+`INCLUDE_QUALITY_GATE_NAME`) accept `true`/`yes`/`1`/`on` and
+`false`/`no`/`0`/`off` in any letter case. Any other value stops the run with
+an error instead of being read as "off".
+
+**Unknown options** and options missing their value stop the run with exit
+code 1. Options take their value as a separate argument (`--formats json`).
+Only `--project-key`, `--html-template`, `--compare-with`,
+`--include-rule-descriptions`, `--concurrency` and the `--http-*` options also
+accept the `--name=value` form.
+
 ### Auto-detection
 
 The tool automatically searches for config files in the project root:
@@ -245,6 +261,21 @@ config key. The path must point to an existing, readable file — otherwise the
 run fails fast. The template is used verbatim; only the placeholders it
 references are substituted, and any unknown `{{...}}` text is left as-is.
 
+**Escaping.** Report values come from the SonarQube server, so they are
+treated as untrusted. Single-value tokens are HTML-escaped when inserted
+(`&`, `<`, `>`, `"`, `'`), which makes them safe both as text and inside a
+quoted attribute — always quote attributes that contain a token
+(`class="rating-{{REL_RATING}}"`). `{{SONAR_URL}}` becomes `#` unless it is an
+`http://` or `https://` URL. Rule descriptions (`--include-rule-descriptions=full`)
+are reduced to a small set of formatting tags with all attributes removed;
+only `http(s)` links are kept.
+
+**PDF and local assets.** For the PDF, the bundled template is rendered with
+JavaScript off and with no access to local files. With a custom template,
+scripts stay enabled and the renderer may read files from the template's own
+directory (reference them by absolute `file://` path); any other local path is
+blocked and makes the PDF step fail.
+
 **Getting started:** copy the bundled template and edit it:
 
 ```bash
@@ -268,7 +299,8 @@ cp templates/report.html.tpl my-branding/report.html.tpl
 Multi-line HTML block tokens (replaced with generated tables/sections):
 
 `{{QG_CONDITIONS_TABLE}}`, `{{HOTSPOTS_TABLE}}`, `{{ISSUES_TABLE}}`,
-`{{QUALITY_GATE_NAME_ROW}}`, `{{QUALITY_PROFILES_SECTION}}`, `{{FILTERS_NOTE}}`.
+`{{QUALITY_GATE_NAME_ROW}}`, `{{QUALITY_PROFILES_SECTION}}`, `{{TREND_SECTION}}`,
+`{{FILTERS_NOTE}}`.
 
 ## Quality Profiles & Quality Gate (audit metadata)
 

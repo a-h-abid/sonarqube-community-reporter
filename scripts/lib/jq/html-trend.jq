@@ -36,14 +36,14 @@ if (.trend // null) == null then "" else
   ([$t.metrics | to_entries[] | .value as $e |
     "<tr><td>" + ($e.label | esc) + "</td><td>" + ($e.previous | fmt | esc) + "</td><td>" +
     ($e.current | fmt | esc) + "</td><td class=\"" + delta_class($e) + "\">" +
-    $e.indicator + " " + ($e.delta | signed) + "</td></tr>"
+    ($e.indicator | esc) + " " + ($e.delta | signed | esc) + "</td></tr>"
    ] | join("\n")) + "\n" +
-  "<tr><td>New Issues</td><td>—</td><td>" + ($t.issues.new | tostring) + "</td><td class=\"" +
+  "<tr><td>New Issues</td><td>—</td><td>" + ($t.issues.new | esc) + "</td><td class=\"" +
     (if $t.issues.new > 0 then "trend-worse" else "trend-same" end) + "\">" +
-    (if $t.issues.new > 0 then "↑ +" + ($t.issues.new | tostring) else "→ 0" end) + "</td></tr>\n" +
-  "<tr><td>Fixed Issues</td><td>—</td><td>" + ($t.issues.fixed | tostring) + "</td><td class=\"" +
+    (if $t.issues.new > 0 then "↑ +" + ($t.issues.new | esc) else "→ 0" end) + "</td></tr>\n" +
+  "<tr><td>Fixed Issues</td><td>—</td><td>" + ($t.issues.fixed | esc) + "</td><td class=\"" +
     (if $t.issues.fixed > 0 then "trend-better" else "trend-same" end) + "\">" +
-    (if $t.issues.fixed > 0 then "↓ -" + ($t.issues.fixed | tostring) else "→ 0" end) + "</td></tr>\n" +
+    (if $t.issues.fixed > 0 then "↓ -" + ($t.issues.fixed | esc) else "→ 0" end) + "</td></tr>\n" +
   "</tbody>\n</table>\n" +
   (if $t.regression
    then "<p class=\"trend-regression\">❌ Regression detected against the baseline.</p>"

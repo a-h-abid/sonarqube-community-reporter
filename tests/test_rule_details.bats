@@ -605,3 +605,84 @@ setup() {
   has_cs=$(echo "$output" | jq '.[0] | has("codeSnippet")')
   [ "$has_cs" = "true" ]
 }
+
+# ===========================================================================
+# _normalize_rule_html — allowlist sanitizer (jq/html-sanitize.jq)
+#   Rule HTML comes from the server and is untrusted.
+# ===========================================================================
+
+@test "_normalize_rule_html: drops a script block in single-line input" {
+  run _normalize_rule_html <<< '<p>ok</p><script>alert(1)</script><p>after</p>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p>ok</p><p>after</p>' ]
+}
+
+@test "_normalize_rule_html: drops script and style blocks spanning lines" {
+  run _normalize_rule_html <<< $'<p>a</p><SCRIPT type="x">\nalert(1)\n</SCRIPT><style>\np{}\n</style><p>b</p>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p>a</p><p>b</p>' ]
+}
+
+@test "_normalize_rule_html: drops an unterminated script through the end" {
+  run _normalize_rule_html <<< '<p>a</p><script>alert(1)'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p>a</p>' ]
+}
+
+@test "_normalize_rule_html: strips attributes and tags that are not allowlisted" {
+  run _normalize_rule_html <<< '<p onclick="x()" style="a">hi</p><img src=x onerror=alert(1)><svg onload=alert(2)></svg><iframe src="file:///etc/passwd"></iframe>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p>hi</p>' ]
+}
+
+@test "_normalize_rule_html: keeps http(s) links only" {
+  run _normalize_rule_html <<< '<a href="https://example.com/a?b=1&amp;c=2" onclick="x()">ok</a><a href="javascript:alert(1)">js</a><a href="data:text/html,x">data</a><a href=http://x.test/y>bare</a>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<a href="https://example.com/a?b=1&amp;c=2" rel="noopener noreferrer">ok</a><a>js</a><a>data</a><a href="http://x.test/y" rel="noopener noreferrer">bare</a>' ]
+}
+
+@test "_normalize_rule_html: converts headings to bold paragraphs" {
+  run _normalize_rule_html <<< '<h2 class="t">Title</h2><p>body</p>'
+  [ "$status" -eq 0 ]
+  [ "$output" = '<p><strong>Title</strong></p><p>body</p>' ]
+}
+
+@test "_normalize_rule_html: escapes a stray '<' and keeps text" {
+  run _normalize_rule_html <<< 'if a < b and c > d then <b>bold</b>'
+  [ "$status" -eq 0 ]
+  [ "$output" = 'if a &lt; b and c > d then <b>bold</b>' ]
+}
+
+@test "_normalize_rule_html: balances tags so content cannot escape its container" {
+  run _normalize_rule_html < <(printf '%s' '</div></td></table><div><ul><li>one<li>two')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<div><ul><li>one<li>two</li></li></ul></div>' ]
+}
+
+@test "_normalize_rule_html: preserves whitespace inside pre blocks" {
+  run _normalize_rule_html <<< $'<pre data-diff-id="1">int x = a &lt; b;\n  y = 2;</pre>'
+  [ "$status" -eq 0 ]
+  [ "$output" = $'<pre>int x = a &lt; b;\n  y = 2;</pre>' ]
+}
+
+@test "_normalize_rule_html: is idempotent" {
+  local once twice
+  once=$(_normalize_rule_html <<< '<h1>H</h1><a href="https://e.test/?a=1&b=2">l</a><ul><li>a<li>b</ul> 1 < 2 <script>x</script>')
+  twice=$(_normalize_rule_html <<< "$once")
+  [ "$once" = "$twice" ]
+}
+
+@test "fetch_rule_details: whyHtml from a hostile rule is sanitized" {
+  sonar_api_get() {
+    # shellcheck disable=SC2016
+    jq -n '{rule: {descriptionSections: [
+      {key: "root_cause", content: "<p>why</p><script>alert(1)</script><img src=x onerror=alert(2)>"},
+      {key: "how_to_fix", content: "<h2>Fix</h2><a href=\"javascript:alert(3)\">x</a>"}]}}'
+  }
+  export -f sonar_api_get
+
+  run fetch_rule_details "custom:R1"
+  [ "$status" -eq 0 ]
+  [ "$(echo "$output" | jq -r '.whyHtml')" = '<p>why</p>' ]
+  [ "$(echo "$output" | jq -r '.howToFixHtml')" = '<p><strong>Fix</strong></p><a>x</a>' ]
+}

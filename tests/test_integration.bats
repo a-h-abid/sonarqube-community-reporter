@@ -212,9 +212,136 @@ teardown() {
   [[ "$output" == *"SONAR_ORGANIZATION is required"* ]]
 }
 
-@test "main: rejects unknown option" {
+@test "main: rejects unknown option with a non-zero exit" {
   PATH="$PRESENT" run main --bogus-flag
+  [ "$status" -eq 1 ]
   [[ "$output" == *"Unknown option: --bogus-flag"* ]]
+  [[ "$output" == *"--help"* ]]
+}
+
+@test "main: rejects the unsupported --flag=value spelling instead of exiting 0" {
+  PATH="$PRESENT" run main --dry-run "$FIXTURE" --formats=json --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown option: --formats=json"* ]]
+  [ -z "$(find "$OUT" -type f)" ]
+}
+
+@test "main: an option missing its value exits 1 with a clear error" {
+  PATH="$PRESENT" run main --dry-run "$FIXTURE" --formats
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Option --formats requires a value"* ]]
+}
+
+@test "main: --config without a path exits 1 with a clear error" {
+  PATH="$PRESENT" run main --dry-run "$FIXTURE" --config
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Option --config requires a value"* ]]
+}
+
+# ===========================================================================
+# Fail-closed switches (FAIL_ON_GATE & friends)
+# ===========================================================================
+
+@test "main: FAIL_ON_GATE accepts the usual true spellings" {
+  local v
+  for v in true TRUE True yes 1 on; do
+    FAIL_ON_GATE="$v"
+    PATH="$PRESENT" run main --dry-run "$FIXTURE_ERR" --formats json --output-dir "$OUT"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"quality gate failed"* ]]
+  done
+}
+
+@test "main: FAIL_ON_GATE false spellings do not fail the run" {
+  local v
+  for v in false FALSE no 0 off ""; do
+    FAIL_ON_GATE="$v"
+    PATH="$PRESENT" run main --dry-run "$FIXTURE_ERR" --formats json --output-dir "$OUT"
+    [ "$status" -eq 0 ]
+  done
+}
+
+@test "main: an unrecognized FAIL_ON_GATE value is an error, not a silent false" {
+  FAIL_ON_GATE="maybe"
+  PATH="$PRESENT" run main --dry-run "$FIXTURE_ERR" --formats json --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Invalid FAIL_ON_GATE value: 'maybe'"* ]]
+  [ -z "$(find "$OUT" -type f)" ]
+}
+
+@test "main: unrecognized WAIT_FOR_ANALYSIS / SONAR_CLOUD values are errors" {
+  WAIT_FOR_ANALYSIS="sometimes"; SONAR_CLOUD="perhaps"
+  PATH="$PRESENT" run main --dry-run "$FIXTURE" --formats json --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Invalid WAIT_FOR_ANALYSIS value"* ]]
+  [[ "$output" == *"Invalid SONAR_CLOUD value"* ]]
+}
+
+@test "main: fail_on_gate from a config file fails the run on a failing gate" {
+  _ENV_SNAPSHOT_VARS=""
+  printf 'options:\n  fail_on_gate: true\n' > "$OUT/c.yml"
+  PATH="$PRESENT" run main --config "$OUT/c.yml" --dry-run "$FIXTURE_ERR" \
+    --formats json --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"quality gate failed"* ]]
+}
+
+@test "main: FAIL_ON_GATE from the environment beats the config file" {
+  _ENV_SNAPSHOT_VARS=" FAIL_ON_GATE "
+  FAIL_ON_GATE="false"
+  printf 'options:\n  fail_on_gate: true\n' > "$OUT/c.yml"
+  PATH="$PRESENT" run main --config "$OUT/c.yml" --dry-run "$FIXTURE_ERR" \
+    --formats json --output-dir "$OUT"
+  [ "$status" -eq 0 ]
+}
+
+@test "normalize_bool_var: rewrites the variable to true/false" {
+  local MY_SWITCH="YES"
+  normalize_bool_var MY_SWITCH
+  [ "$MY_SWITCH" = "true" ]
+  MY_SWITCH="Off"
+  normalize_bool_var MY_SWITCH
+  [ "$MY_SWITCH" = "false" ]
+  MY_SWITCH=""
+  normalize_bool_var MY_SWITCH
+  [ "$MY_SWITCH" = "false" ]
+}
+
+# ===========================================================================
+# Generator failures are fatal
+# ===========================================================================
+
+@test "main: untrusted report values cannot run commands during HTML generation" {
+  local marker="$OUT/PWNED"
+  jq --arg name "Acme|;1e touch ${marker} #" '.metadata.projectName = $name' "$FIXTURE" > "$OUT/evil.json"
+  PATH="$PRESENT" run main --dry-run "$OUT/evil.json" --formats html --output-dir "$OUT"
+  [ "$status" -eq 0 ]
+  [ ! -e "$marker" ]
+  [ -s "$(find "$OUT" -name '*.html')" ]
+}
+
+@test "main: exits 1 and names the format when a generator fails" {
+  jq '.issues = 5' "$FIXTURE" > "$OUT/bad.json"
+  PATH="$PRESENT" run main --dry-run "$OUT/bad.json" --formats json,html --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to generate HTML report"* ]]
+  [[ "$output" != *"Generated"* ]]
+  [ -z "$(find "$OUT" -name '*.html')" ]
+}
+
+@test "main: exits 1 when a generator reports success but leaves an empty file" {
+  generate_md_report() { : > "$2/empty.md"; echo "$2/empty.md"; }
+  PATH="$PRESENT" run main --dry-run "$FIXTURE" --formats md --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Report file is missing or empty"* ]]
+  [[ "$output" == *"Failed to generate MD report"* ]]
+}
+
+@test "main: exits 1 when the csv generator produces nothing" {
+  generate_csv_report() { :; }
+  PATH="$PRESENT" run main --dry-run "$FIXTURE" --formats csv --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to generate CSV report"* ]]
 }
 
 # ===========================================================================
@@ -369,4 +496,20 @@ teardown() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"Usage:"* ]]
   [[ "$output" == *"--dry-run"* ]]
+}
+
+@test "entrypoint: an unknown option exits 1 as a subprocess" {
+  PATH="$PRESENT" run bash "${REPO_ROOT}/scripts/sonar-report.sh" --no-such-option
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Unknown option: --no-such-option"* ]]
+}
+
+@test "entrypoint: a failing generator ends the run with exit 1 (errexit inside \$())" {
+  jq '.issues = 5' "$FIXTURE" > "$OUT/bad.json"
+  PATH="$PRESENT" run bash "${REPO_ROOT}/scripts/sonar-report.sh" \
+    --dry-run "$OUT/bad.json" --formats html,json --output-dir "$OUT"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to generate HTML report"* ]]
+  [ -z "$(find "$OUT" -name '*.html')" ]
+  [ -z "$(find "$OUT" -name '*.json' ! -name 'bad.json')" ]
 }

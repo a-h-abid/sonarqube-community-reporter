@@ -117,6 +117,26 @@ if [[ -f "${_MAIN_SCRIPT_DIR}/../.env" ]]; then
   source "${_MAIN_SCRIPT_DIR}/../.env"
 fi
 
+# ===========================================================================
+# Snapshot environment variables set before defaults/config
+# (These take precedence over config file values and defaults)
+# Taken before the libraries are sourced: they assign defaults of their own
+# (e.g. SONAR_CLOUD=false), which must not be mistaken for environment input.
+# ===========================================================================
+_ENV_SNAPSHOT_VARS=""
+for _var in SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_TASK_ID \
+            SONAR_ORGANIZATION SONAR_CLOUD REPORT_FORMATS REPORT_OUTPUT_DIR HTML_TEMPLATE \
+            POLL_INTERVAL POLL_TIMEOUT ANALYSIS_ID DRY_RUN_FILE NOTIFY_WEBHOOK \
+            INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT \
+            INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME \
+            SEVERITY_THRESHOLD ISSUE_TYPES MAX_ISSUES \
+            WAIT_FOR_ANALYSIS FAIL_ON_GATE COMPARE_WITH FAIL_ON_REGRESSION \
+            CONCURRENCY HTTP_RETRIES HTTP_RETRY_DELAY HTTP_CONNECT_TIMEOUT HTTP_TIMEOUT; do
+  if [[ -n "${!_var:-}" ]]; then
+    _ENV_SNAPSHOT_VARS="${_ENV_SNAPSHOT_VARS} ${_var}"
+  fi
+done
+
 # Source library modules
 # shellcheck source=scripts/lib/api.sh
 source "${_MAIN_SCRIPT_DIR}/lib/api.sh"
@@ -150,24 +170,6 @@ source "${_MAIN_SCRIPT_DIR}/lib/portfolio.sh"
 source "${_MAIN_SCRIPT_DIR}/lib/notify.sh"
 # shellcheck source=scripts/wait-for-analysis.sh
 source "${_MAIN_SCRIPT_DIR}/wait-for-analysis.sh"
-
-# ===========================================================================
-# Snapshot environment variables set before defaults/config
-# (These take precedence over config file values and defaults)
-# ===========================================================================
-_ENV_SNAPSHOT_VARS=""
-for _var in SONAR_URL SONAR_TOKEN SONAR_PROJECT_KEY SONAR_BRANCH SONAR_TASK_ID \
-            SONAR_ORGANIZATION SONAR_CLOUD REPORT_FORMATS REPORT_OUTPUT_DIR HTML_TEMPLATE \
-            POLL_INTERVAL POLL_TIMEOUT ANALYSIS_ID DRY_RUN_FILE NOTIFY_WEBHOOK \
-            INCLUDE_RULE_DESCRIPTIONS INCLUDE_CODE_SNIPPETS SNIPPET_CONTEXT \
-            INCLUDE_QUALITY_PROFILES INCLUDE_QUALITY_GATE_NAME \
-            SEVERITY_THRESHOLD ISSUE_TYPES MAX_ISSUES \
-            WAIT_FOR_ANALYSIS FAIL_ON_GATE COMPARE_WITH FAIL_ON_REGRESSION \
-            CONCURRENCY HTTP_RETRIES HTTP_RETRY_DELAY HTTP_CONNECT_TIMEOUT HTTP_TIMEOUT; do
-  if [[ -n "${!_var:-}" ]]; then
-    _ENV_SNAPSHOT_VARS="${_ENV_SNAPSHOT_VARS} ${_var}"
-  fi
-done
 
 WAIT_FOR_ANALYSIS="${WAIT_FOR_ANALYSIS:-false}"
 FAIL_ON_GATE="${FAIL_ON_GATE:-false}"
@@ -226,6 +228,15 @@ show_help() {
   exit 0
 }
 
+# usage_error <message> — report a command-line mistake and exit non-zero, so
+# a mistyped flag fails the pipeline instead of ending "successfully" with no
+# report.
+usage_error() {
+  log_error "$1"
+  log_info "Run with --help for usage information"
+  exit 1
+}
+
 # ---------------------------------------------------------------------------
 # append_project_keys <value>
 #   Splits a (possibly comma-separated) value and appends each non-empty key to
@@ -261,6 +272,19 @@ normalize_project_keys() {
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
+    # Options that take a value must be followed by one.
+    case "$1" in
+      --url|--token|--project-key|--project-keys|--branch|--task-id|--formats|\
+      --output-dir|--html-template|--organization|--poll-interval|--poll-timeout|\
+      --compare-with|--dry-run|--notify-webhook|--config|--snippet-context|\
+      --severity-threshold|--issue-types|--max-issues|--concurrency|--http-retries|\
+      --http-retry-delay|--http-connect-timeout|--http-timeout)
+        if [[ $# -lt 2 ]]; then
+          usage_error "Option $1 requires a value"
+        fi
+        ;;
+    esac
+
     case "$1" in
       --url)             SONAR_URL="$2";          shift 2 ;;
       --token)           SONAR_TOKEN="$2";        shift 2 ;;
@@ -314,8 +338,7 @@ parse_args() {
       --http-timeout=*)         HTTP_TIMEOUT="${1#*=}";      shift   ;;
       -h|--help)         show_help ;;
       *)
-        log_error "Unknown option: $1"
-        show_help
+        usage_error "Unknown option: $1"
         ;;
     esac
   done
@@ -344,6 +367,40 @@ contains_value() {
   return 1
 }
 
+# ---------------------------------------------------------------------------
+# normalize_bool_var <VAR_NAME>
+#   Rewrites the named variable to exactly "true" or "false", accepting the
+#   usual spellings in any case (true/yes/1/on, false/no/0/off, empty = false).
+#   Later code compares against "true", so an unrecognized spelling must be an
+#   error rather than a silent "false". Returns 1 on an invalid value.
+# ---------------------------------------------------------------------------
+normalize_bool_var() {
+  local name="$1"
+  local value="${!name:-}"
+
+  case "${value,,}" in
+    true|yes|1|on)     printf -v "$name" '%s' "true"  ;;
+    false|no|0|off|"") printf -v "$name" '%s' "false" ;;
+    *)
+      log_error "Invalid ${name} value: '${value}' (expected true or false)"
+      return 1
+      ;;
+  esac
+}
+
+# ---------------------------------------------------------------------------
+# validate_switch_flags — Normalize the on/off switches that gate behaviour
+#   (WAIT_FOR_ANALYSIS, FAIL_ON_GATE, SONAR_CLOUD). Returns 1 on invalid input.
+# ---------------------------------------------------------------------------
+validate_switch_flags() {
+  local errors=0 _name
+  for _name in WAIT_FOR_ANALYSIS FAIL_ON_GATE SONAR_CLOUD; do
+    normalize_bool_var "$_name" || errors=$((errors + 1))
+  done
+
+  [[ "$errors" -eq 0 ]]
+}
+
 validate_enrichment_flags() {
   # Normalize INCLUDE_RULE_DESCRIPTIONS
   case "${INCLUDE_RULE_DESCRIPTIONS:-}" in
@@ -355,14 +412,7 @@ validate_enrichment_flags() {
   esac
 
   # Normalize INCLUDE_CODE_SNIPPETS to "true"/"false"
-  case "${INCLUDE_CODE_SNIPPETS:-false}" in
-    true|TRUE|yes|YES|1|on|ON)  INCLUDE_CODE_SNIPPETS="true"  ;;
-    false|FALSE|no|NO|0|off|OFF|"") INCLUDE_CODE_SNIPPETS="false" ;;
-    *)
-      log_error "Invalid INCLUDE_CODE_SNIPPETS value: '${INCLUDE_CODE_SNIPPETS}'"
-      return 1
-      ;;
-  esac
+  normalize_bool_var INCLUDE_CODE_SNIPPETS || return 1
 
   # Validate + clamp SNIPPET_CONTEXT
   if ! [[ "${SNIPPET_CONTEXT:-3}" =~ ^[0-9]+$ ]]; then
@@ -375,24 +425,10 @@ validate_enrichment_flags() {
   fi
 
   # Normalize INCLUDE_QUALITY_PROFILES to "true"/"false"
-  case "${INCLUDE_QUALITY_PROFILES:-false}" in
-    true|TRUE|yes|YES|1|on|ON)      INCLUDE_QUALITY_PROFILES="true"  ;;
-    false|FALSE|no|NO|0|off|OFF|"") INCLUDE_QUALITY_PROFILES="false" ;;
-    *)
-      log_error "Invalid INCLUDE_QUALITY_PROFILES value: '${INCLUDE_QUALITY_PROFILES}'"
-      return 1
-      ;;
-  esac
+  normalize_bool_var INCLUDE_QUALITY_PROFILES || return 1
 
   # Normalize INCLUDE_QUALITY_GATE_NAME to "true"/"false"
-  case "${INCLUDE_QUALITY_GATE_NAME:-false}" in
-    true|TRUE|yes|YES|1|on|ON)      INCLUDE_QUALITY_GATE_NAME="true"  ;;
-    false|FALSE|no|NO|0|off|OFF|"") INCLUDE_QUALITY_GATE_NAME="false" ;;
-    *)
-      log_error "Invalid INCLUDE_QUALITY_GATE_NAME value: '${INCLUDE_QUALITY_GATE_NAME}'"
-      return 1
-      ;;
-  esac
+  normalize_bool_var INCLUDE_QUALITY_GATE_NAME || return 1
 
   # Validate HTML_TEMPLATE: when set it must be an existing, readable file.
   if [[ -n "${HTML_TEMPLATE:-}" ]]; then
@@ -460,14 +496,7 @@ validate_filter_flags() {
 #   Returns 1 on invalid input.
 # ---------------------------------------------------------------------------
 validate_trend_flags() {
-  case "${FAIL_ON_REGRESSION:-false}" in
-    true|TRUE|yes|YES|1|on|ON)      FAIL_ON_REGRESSION="true"  ;;
-    false|FALSE|no|NO|0|off|OFF|"") FAIL_ON_REGRESSION="false" ;;
-    *)
-      log_error "Invalid FAIL_ON_REGRESSION value: '${FAIL_ON_REGRESSION}'"
-      return 1
-      ;;
-  esac
+  normalize_bool_var FAIL_ON_REGRESSION || return 1
 
   if [[ -z "${COMPARE_WITH:-}" ]]; then
     if [[ "$FAIL_ON_REGRESSION" == "true" ]]; then
@@ -576,6 +605,12 @@ validate_report_formats() {
 validate_params() {
   local errors=0
 
+  # Normalize the on/off switches first: everything below compares them to
+  # the literal "true".
+  if ! validate_switch_flags; then
+    errors=$((errors + 1))
+  fi
+
   # Auto-detect SonarCloud from URL before validating other parameters
   detect_sonarcloud
 
@@ -640,10 +675,29 @@ validate_params() {
   fi
 }
 
+# ---------------------------------------------------------------------------
+# require_report_file <path>
+#   A generator that reported success must have left a non-empty file behind.
+#   Returns 1 otherwise, so a broken report never counts as generated.
+# ---------------------------------------------------------------------------
+require_report_file() {
+  local path="${1:-}"
+
+  if [[ -z "$path" ]] || [[ ! -s "$path" ]]; then
+    log_error "Report file is missing or empty: ${path:-<none>}"
+    return 1
+  fi
+}
+
 # ===========================================================================
 # Main
 # ===========================================================================
 main() {
+  # bash turns errexit off inside $(...) unless told otherwise, and every
+  # report generator runs inside one. Without this a failing step in a
+  # generator is skipped over and the run still ends "successfully".
+  shopt -s inherit_errexit
+
   # First pass: look for --config flag only (to load config early)
   local explicit_config=""
   for arg in "$@"; do
@@ -742,12 +796,22 @@ main() {
   local report_data_file
   # Temp files we own and must clean up. The dry-run input file is never owned,
   # so it is never deleted; the filter step (below) may create a second temp.
-  local _owned_report_data_file=""
-  local _filtered_report_data_file=""
-  local _trend_report_data_file=""
-  trap '[[ -n "${_owned_report_data_file:-}" ]] && rm -f "$_owned_report_data_file"
+  # These are globals, not locals: when errexit ends the run, bash unwinds the
+  # function scope before the EXIT trap fires, and locals would be gone.
+  _owned_report_data_file=""
+  _filtered_report_data_file=""
+  _trend_report_data_file=""
+  # Set while a report format is being generated, so an abort inside a
+  # generator is reported with the format it happened in.
+  _generating_format=""
+  _main_exit_status=0
+  trap '_main_exit_status=$?
+        [[ -n "${_owned_report_data_file:-}" ]] && rm -f "$_owned_report_data_file"
         [[ -n "${_filtered_report_data_file:-}" ]] && rm -f "$_filtered_report_data_file"
         [[ -n "${_trend_report_data_file:-}" ]] && rm -f "$_trend_report_data_file"
+        if [[ "$_main_exit_status" -ne 0 ]] && [[ -n "${_generating_format:-}" ]]; then
+          log_error "Failed to generate ${_generating_format^^} report"
+        fi
         true' EXIT
 
   if [[ -n "$DRY_RUN_FILE" ]]; then
@@ -834,21 +898,27 @@ main() {
 
   mkdir -p "$REPORT_OUTPUT_DIR"
 
+  # Generators are called as plain assignments (no "|| handler") on purpose:
+  # a handler would switch errexit off for the whole generator. A generator
+  # that fails therefore ends the run; the EXIT trap names the format.
+  local f
   for fmt in "${REQUESTED_FORMATS[@]}"; do
+    _generating_format="$fmt"
     case "$fmt" in
       json)
-        local f
         f=$(generate_json_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+        require_report_file "$f" || exit 1
         generated_files+=("$f")
         ;;
       md)
-        local f
         f=$(generate_md_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+        require_report_file "$f" || exit 1
         generated_files+=("$f")
         ;;
       html)
         if [[ -z "$html_file" ]]; then
           html_file=$(generate_html_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+          require_report_file "$html_file" || exit 1
           generated_files+=("$html_file")
         else
           log_info "Reusing previously generated HTML report"
@@ -858,29 +928,31 @@ main() {
         # PDF needs HTML — generate it first if not already done
         if [[ -z "$html_file" ]]; then
           html_file=$(generate_html_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+          require_report_file "$html_file" || exit 1
           generated_files+=("$html_file")
         fi
-        local f
+        # An empty path means the converter is not installed (format skipped).
         f=$(generate_pdf_report "$html_file" "$REPORT_OUTPUT_DIR")
         if [[ -n "$f" ]]; then
+          require_report_file "$f" || exit 1
           generated_files+=("$f")
         else
           skipped_formats+=("pdf")
         fi
         ;;
       xlsx)
-        local f
         f=$(generate_xlsx_report "$report_data_file" "$REPORT_OUTPUT_DIR")
         if [[ -n "$f" ]]; then
+          require_report_file "$f" || exit 1
           generated_files+=("$f")
         else
           skipped_formats+=("xlsx")
         fi
         ;;
       ods)
-        local f
         f=$(generate_ods_report "$report_data_file" "$REPORT_OUTPUT_DIR")
         if [[ -n "$f" ]]; then
+          require_report_file "$f" || exit 1
           generated_files+=("$f")
         else
           skipped_formats+=("ods")
@@ -889,17 +961,21 @@ main() {
       csv)
         local csv_out
         csv_out=$(generate_csv_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+        require_report_file "${csv_out%%$'\n'*}" || exit 1
         while IFS= read -r f; do
-          [[ -n "$f" ]] && generated_files+=("$f")
+          [[ -n "$f" ]] || continue
+          require_report_file "$f" || exit 1
+          generated_files+=("$f")
         done <<< "$csv_out"
         ;;
       sarif)
-        local f
         f=$(generate_sarif_report "$report_data_file" "$REPORT_OUTPUT_DIR")
+        require_report_file "$f" || exit 1
         generated_files+=("$f")
         ;;
     esac
   done
+  _generating_format=""
 
   # --- Step 5: Summary ---
   echo ""

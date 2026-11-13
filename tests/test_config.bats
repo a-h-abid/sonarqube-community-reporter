@@ -319,3 +319,69 @@ EOF
   [ "$status" -eq 0 ]
   [ "$output" = "HTML_TEMPLATE" ]
 }
+
+# ==============================================================================
+# Config file vs. built-in defaults
+#   The main script assigns defaults such as FAIL_ON_GATE=false before the
+#   config file is read. A config value must replace such a default; only a
+#   value that came from the environment (recorded in _ENV_SNAPSHOT_VARS) wins.
+# ==============================================================================
+@test "set_config_var: with an env snapshot, config replaces a pre-assigned default" {
+  _ENV_SNAPSHOT_VARS=""
+  FAIL_ON_GATE="false"
+  set_config_var FAIL_ON_GATE "true"
+  [ "$FAIL_ON_GATE" = "true" ]
+}
+
+@test "set_config_var: with an env snapshot, the environment still wins" {
+  _ENV_SNAPSHOT_VARS=" FAIL_ON_GATE "
+  FAIL_ON_GATE="false"
+  set_config_var FAIL_ON_GATE "true"
+  [ "$FAIL_ON_GATE" = "false" ]
+}
+
+@test "set_config_var: the first non-empty config entry for a key wins" {
+  _ENV_SNAPSHOT_VARS=""
+  SONAR_BRANCH=""
+  set_config_var SONAR_BRANCH ""
+  set_config_var SONAR_BRANCH "first"
+  set_config_var SONAR_BRANCH "second"
+  [ "$SONAR_BRANCH" = "first" ]
+}
+
+@test "set_config_var: an empty config value does not clear a default" {
+  _ENV_SNAPSHOT_VARS=""
+  POLL_INTERVAL="5"
+  set_config_var POLL_INTERVAL ""
+  [ "$POLL_INTERVAL" = "5" ]
+}
+
+@test "set_config_var: an empty config value still defines an unset variable" {
+  _ENV_SNAPSHOT_VARS=""
+  unset SONAR_TASK_ID
+  set_config_var SONAR_TASK_ID ""
+  [ "${SONAR_TASK_ID-unset}" = "" ]
+}
+
+@test "parse_yaml_config: on/off switches override defaults assigned earlier" {
+  _ENV_SNAPSHOT_VARS=""
+  WAIT_FOR_ANALYSIS="false"; FAIL_ON_GATE="false"; FAIL_ON_REGRESSION="false"; SONAR_CLOUD="false"
+  local f; f=$(mktemp)
+  printf 'sonar:\n  cloud: true\npolling:\n  wait: true\noptions:\n  fail_on_gate: true\n  fail_on_regression: true\n' > "$f"
+  parse_yaml_config "$f"
+  rm -f "$f"
+  [ "$SONAR_CLOUD" = "true" ]
+  [ "$WAIT_FOR_ANALYSIS" = "true" ]
+  [ "$FAIL_ON_GATE" = "true" ]
+  [ "$FAIL_ON_REGRESSION" = "true" ]
+}
+
+@test "parse_shell_config: FAIL_ON_GATE overrides a default assigned earlier" {
+  _ENV_SNAPSHOT_VARS=""
+  FAIL_ON_GATE="false"
+  local f; f=$(mktemp)
+  printf 'FAIL_ON_GATE=true\n' > "$f"
+  parse_shell_config "$f"
+  rm -f "$f"
+  [ "$FAIL_ON_GATE" = "true" ]
+}

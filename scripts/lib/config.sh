@@ -87,10 +87,21 @@ sanitize_value() {
   echo "$value"
 }
 
+# Keys already assigned by a config entry during this run (space-separated).
+_CONFIG_SET_VARS=""
+
 # ---------------------------------------------------------------------------
 # set_config_var <key> <value>
-#   Sets a configuration variable only if it's not already set (respects
-#   environment variables). Validates key against allowlist and sanitizes value.
+#   Applies one config-file entry. Validates the key against the allowlist and
+#   sanitizes the value. Precedence:
+#     - A key that came from the environment always wins. The main script
+#       records those in _ENV_SNAPSHOT_VARS before any default is assigned.
+#       Without a snapshot (library used standalone) any non-empty variable is
+#       treated as coming from the environment.
+#     - Otherwise the config value is applied, replacing a built-in default
+#       that may already be assigned (e.g. FAIL_ON_GATE=false). Deciding by
+#       "is the variable empty?" would silently drop such settings.
+#     - For a key repeated in the config file, the first non-empty value wins.
 # ---------------------------------------------------------------------------
 set_config_var() {
   local key="$1"
@@ -102,18 +113,30 @@ set_config_var() {
     return 0
   fi
 
-  # Only set if not already set by environment (check snapshot)
-  if [[ " ${_ENV_SNAPSHOT_VARS:-} " == *" ${key} "* ]]; then
+  # Environment wins over the config file.
+  if [[ -n "${_ENV_SNAPSHOT_VARS+set}" ]]; then
+    if [[ " ${_ENV_SNAPSHOT_VARS} " == *" ${key} "* ]]; then
+      return 0
+    fi
+  elif [[ -n "${!key:-}" ]] && [[ " ${_CONFIG_SET_VARS} " != *" ${key} "* ]]; then
     return 0
   fi
 
-  # Only set if not already set by a previous config entry
-  if [[ -z "${!key:-}" ]]; then
+  # Only the first non-empty config entry for a key applies.
+  if [[ " ${_CONFIG_SET_VARS} " == *" ${key} "* ]] && [[ -n "${!key:-}" ]]; then
+    return 0
+  fi
+
+  if [[ -n "$value" ]]; then
     local sanitized_value
     sanitized_value=$(sanitize_value "$value")
 
-    # Use declare to set the variable in the caller's scope
     export "${key}=${sanitized_value}"
+    _CONFIG_SET_VARS="${_CONFIG_SET_VARS} ${key}"
+  elif [[ -z "${!key:-}" ]]; then
+    # An empty config value never replaces a default; it only makes sure the
+    # variable exists.
+    export "${key}="
   fi
 }
 

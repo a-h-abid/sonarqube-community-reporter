@@ -50,22 +50,15 @@ _validate_enrichment_payload() {
 
 # ---------------------------------------------------------------------------
 # _normalize_rule_html  (stdin -> stdout)
-#   SonarQube's rule HTML is trusted documentation. We defensively strip
-#   <script> and <style> blocks (rare but possible in custom rules) and
-#   convert heading tags to bold paragraphs for compact display.
+#   Rule HTML comes from the server (plugins, custom rules), so it is treated
+#   as untrusted: it is rebuilt through the allowlist sanitizer in
+#   jq/html-sanitize.jq — allowlisted tags only, attributes dropped (except
+#   http(s) links), tags balanced, headings turned into bold paragraphs.
+#   The HTML report sanitizes again at render time with the same function, so
+#   report data saved by older versions is covered too.
 # ---------------------------------------------------------------------------
 _normalize_rule_html() {
-  # kcov-skip-start
-  sed -E '
-    :join
-    N
-    $!bjoin
-    s|<[Ss][Cc][Rr][Ii][Pp][Tt][^>]*>.*</[Ss][Cc][Rr][Ii][Pp][Tt]>||g
-    s|<[Ss][Tt][Yy][Ll][Ee][^>]*>.*</[Ss][Tt][Yy][Ll][Ee]>||g
-    s|<[Hh][1-6][^>]*>|<p><strong>|g
-    s|</[Hh][1-6]>|</strong></p>|g
-  '
-  # kcov-skip-end
+  jq -Rrs -L "${_RULE_DETAILS_SCRIPT_DIR}/jq" 'include "html-sanitize"; sanitize_html'
 }
 
 # ---------------------------------------------------------------------------
