@@ -136,7 +136,10 @@ present in the environment or on the command line.
 an error instead of being read as "off".
 
 **Unknown options** and options missing their value stop the run with exit
-code 1. Options take their value as a separate argument (`--formats json`).
+code 1. A value that itself starts with `--` counts as missing, so
+`--branch --fail-on-gate` is an error rather than a branch named
+`--fail-on-gate`. Options take their value as a separate argument
+(`--formats json`).
 Only `--project-key`, `--html-template`, `--compare-with`,
 `--include-rule-descriptions`, `--concurrency` and the `--http-*` options also
 accept the `--name=value` form.
@@ -268,7 +271,8 @@ quoted attribute — always quote attributes that contain a token
 (`class="rating-{{REL_RATING}}"`). `{{SONAR_URL}}` becomes `#` unless it is an
 `http://` or `https://` URL. Rule descriptions (`--include-rule-descriptions=full`)
 are reduced to a small set of formatting tags with all attributes removed;
-only `http(s)` links are kept.
+only `http(s)` links are kept, and table markup is kept only where it forms a
+well-structured table (loose rows or cells are reduced to their text).
 
 **PDF and local assets.** For the PDF, the bundled template is rendered with
 JavaScript off and with no access to local files. With a custom template,

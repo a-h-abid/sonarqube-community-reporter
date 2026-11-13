@@ -232,6 +232,28 @@ teardown() {
   [[ "$output" == *"Option --formats requires a value"* ]]
 }
 
+@test "main: an option given where a value belongs is an error, not the value" {
+  PATH="$PRESENT" run main --dry-run "$FIXTURE_ERR" --formats json --output-dir "$OUT" \
+    --branch --fail-on-gate
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Option --branch requires a value (found option '--fail-on-gate' instead)"* ]]
+  [ -z "$(find "$OUT" -type f)" ]
+}
+
+@test "main: -h given where a value belongs is an error" {
+  PATH="$PRESENT" run main --dry-run "$FIXTURE" --formats -h
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Option --formats requires a value"* ]]
+}
+
+@test "main: an empty value and a value starting with a single dash are accepted" {
+  mkdir -p "$OUT/-reports"
+  PATH="$PRESENT" run main --dry-run "$FIXTURE" --branch "" --formats json \
+    --output-dir "$OUT/-reports"
+  [ "$status" -eq 0 ]
+  [ -n "$(find "$OUT/-reports" -name '*.json')" ]
+}
+
 @test "main: --config without a path exits 1 with a clear error" {
   PATH="$PRESENT" run main --dry-run "$FIXTURE" --config
   [ "$status" -eq 1 ]

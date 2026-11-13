@@ -272,7 +272,10 @@ normalize_project_keys() {
 
 parse_args() {
   while [[ $# -gt 0 ]]; do
-    # Options that take a value must be followed by one.
+    # Options that take a value must be followed by one. Another option in
+    # its place means the value was left out (e.g. an empty unquoted variable
+    # in a CI script): "--branch --fail-on-gate" would otherwise swallow the
+    # gate switch as the branch name and silently turn enforcement off.
     case "$1" in
       --url|--token|--project-key|--project-keys|--branch|--task-id|--formats|\
       --output-dir|--html-template|--organization|--poll-interval|--poll-timeout|\
@@ -281,6 +284,9 @@ parse_args() {
       --http-retry-delay|--http-connect-timeout|--http-timeout)
         if [[ $# -lt 2 ]]; then
           usage_error "Option $1 requires a value"
+        fi
+        if [[ "$2" == --* ]] || [[ "$2" == "-h" ]]; then
+          usage_error "Option $1 requires a value (found option '$2' instead)"
         fi
         ;;
     esac

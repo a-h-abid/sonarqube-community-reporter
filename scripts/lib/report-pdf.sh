@@ -42,7 +42,7 @@ generate_pdf_report() {
   mkdir -p "$output_dir"
 
   local temp_base
-  temp_base=$(create_temp_file)
+  temp_base=$(create_temp_file) || return 1
   temp_html="${temp_base}.html"
   mv "$temp_base" "$temp_html" || {
     rm -f "$temp_base"
@@ -52,6 +52,9 @@ generate_pdf_report() {
   # outer caller's scope (where $temp_html is unset) — bash RETURN traps are
   # shell-wide. Mirrors the pattern used in report-html.sh / notify.sh.
   trap '[[ -n "${temp_html:-}" ]] && rm -f "$temp_html"' RETURN
+
+  # Every step below is guarded with "|| return 1": under errexit an unguarded
+  # failure would end the subshell without running the cleanup trap above.
 
   # kcov-skip-start
   awk '
@@ -63,7 +66,7 @@ generate_pdf_report() {
       inserted=1
     }
     { print }
-  ' "$html_file" > "$temp_html"
+  ' "$html_file" > "$temp_html" || return 1
   # kcov-skip-end
   render_html="$temp_html"
 

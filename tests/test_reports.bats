@@ -1893,3 +1893,42 @@ SH
   [[ "$output" == *"Rendered HTML report is empty"* ]]
   [ -z "$(find "$_OUTPUT_DIR" -name '*.html')" ]
 }
+
+@test "generate_html_report: table tags in a rule description stay inside its section" {
+  local f
+  f=$(_hostile_report '
+    .metadata.enrichment = {"ruleDescriptions": "full", "codeSnippets": false, "snippetContext": 3}
+    | .issues[0].ruleDescription = {
+        "whyHtml": "<td>spoofed cell</td><tr><td>spoofed row</td></tr>",
+        "howToFixHtml": "<table><table></table></table></td></tr></tbody></table>fix",
+        "whyText": "w", "howToFixText": "f", "whyTextShort": "w", "howToFixTextShort": "f"}
+    | .hotspots[0].ruleDescription = {
+        "whyHtml": "</td></tr></tbody></table><tbody><tr><td>fake hotspot</td></tr></tbody>",
+        "howToFixHtml": "<table><tr><td>ok</td></tr></table>",
+        "riskText": "r", "whyText": "w", "howToFixText": "f"}')
+  run generate_html_report "$f" "$_OUTPUT_DIR"
+  [ "$status" -eq 0 ]
+  local html="${lines[-1]}"
+  grep -qF '<div class="issue-section-body">spoofed cellspoofed row</div>' "$html"
+  grep -qF '<div class="issue-section-body"><table></table>fix</div>' "$html"
+  grep -qF '<div class="hotspot-section-body">fake hotspot</div>' "$html"
+  grep -qF '<div class="hotspot-section-body"><table><tr><td>ok</td></tr></table></div>' "$html"
+}
+
+@test "generate_pdf_report: a failing preprocessing step cleans up its temp file under errexit" {
+  local html="$_OUTPUT_DIR/in.html" tmp_root="$_OUTPUT_DIR/tmp-root"
+  mkdir -p "$tmp_root"
+  printf '<html><head></head><body>hi</body></html>' > "$html"
+  # main() calls generators inside $(...) with inherit_errexit on; reproduce
+  # that here with an awk that fails.
+  SONAR_REPORT_TMP_DIR="$tmp_root" PATH="$_FAKE_BIN:$PATH" run bash -c '
+    set -euo pipefail
+    shopt -s inherit_errexit
+    source "$1/scripts/lib/report-pdf.sh"
+    awk() { return 1; }
+    out=$(generate_pdf_report "$2" "$3")
+  ' _ "$REPO_ROOT" "$html" "$_OUTPUT_DIR"
+  [ "$status" -ne 0 ]
+  [ -z "$(ls -A "$tmp_root")" ]
+  [ -z "$(find "$_OUTPUT_DIR" -name '*.pdf')" ]
+}

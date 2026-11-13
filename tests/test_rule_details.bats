@@ -686,3 +686,60 @@ setup() {
   [ "$(echo "$output" | jq -r '.whyHtml')" = '<p>why</p>' ]
   [ "$(echo "$output" | jq -r '.howToFixHtml')" = '<p><strong>Fix</strong></p><a>x</a>' ]
 }
+
+# ---------------------------------------------------------------------------
+# Table markup — descriptions are rendered inside a report table cell, where a
+# browser lets a loose <td>/<tr>/</table> close the report's own cell or table.
+# ---------------------------------------------------------------------------
+
+@test "_normalize_rule_html: drops table parts that are not inside a table" {
+  run _normalize_rule_html < <(printf '%s' '<td>cell</td><tr><th>head</th></tr><tbody><caption>cap</caption></tbody><p>after</p>')
+  [ "$status" -eq 0 ]
+  [ "$output" = 'cellheadcap<p>after</p>' ]
+}
+
+@test "_normalize_rule_html: drops stray table closers" {
+  run _normalize_rule_html < <(printf '%s' 'a</td></tr></tbody></table>b')
+  [ "$status" -eq 0 ]
+  [ "$output" = 'ab' ]
+}
+
+@test "_normalize_rule_html: keeps a well-formed table, including a nested one" {
+  local html='<table><caption>c</caption><thead><tr><th>h</th></tr></thead><tbody><tr><td>a<br>b</td><td><table><tr><td>inner</td></tr></table></td></tr></tbody></table>'
+  run _normalize_rule_html < <(printf '%s' "$html")
+  [ "$status" -eq 0 ]
+  [ "$output" = "$html" ]
+}
+
+@test "_normalize_rule_html: supplies the end tags HTML lets tables omit" {
+  run _normalize_rule_html < <(printf '%s' '<table><thead><tr><th>h<tbody><tr><td>a<td>b<tr><td>c</table>tail')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<table><thead><tr><th>h</th></tr></thead><tbody><tr><td>a</td><td>b</td></tr><tr><td>c</td></tr></tbody></table>tail' ]
+}
+
+@test "_normalize_rule_html: a table opened directly inside a table is dropped" {
+  # <table><table> makes a browser close the first table, so the second
+  # </table> would close the report's own table.
+  run _normalize_rule_html < <(printf '%s' '<table><table><tr><td>x</td></tr></table></table><p>after</p>')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<table><tr><td>x</td></tr></table><p>after</p>' ]
+}
+
+@test "_normalize_rule_html: only table parts appear between table, section and row" {
+  run _normalize_rule_html < <(printf '%s' '<table><p>x</p><tr><div><br><td>y</td></div></tr></table>')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<table>x<tr><td>y</td></tr></table>' ]
+}
+
+@test "_normalize_rule_html: a cell with no open row has no place" {
+  run _normalize_rule_html < <(printf '%s' '<table><td>x</td></table>')
+  [ "$status" -eq 0 ]
+  [ "$output" = '<table>x</table>' ]
+}
+
+@test "_normalize_rule_html: table handling is idempotent" {
+  local once twice
+  once=$(printf '%s' '<td>x</td><table><table><tr><p><td>1<h2>t<td>2<tr><td>3' | _normalize_rule_html)
+  twice=$(printf '%s' "$once" | _normalize_rule_html)
+  [ "$once" = "$twice" ]
+}
