@@ -58,6 +58,19 @@ Options:
                          (BUG,VULNERABILITY,CODE_SMELL). (env: ISSUE_TYPES)
   --max-issues N         Show at most N issues (highest severity kept), applied
                          after severity/type filters. (env: MAX_ISSUES)
+  --concurrency N        Parallel API workers for portfolio projects and
+                         enrichment lookups (default: 4; 1 = sequential).
+                                                    (env: CONCURRENCY)
+  --http-retries N       Retries for transient API failures (default: 3;
+                         0 = off)                   (env: HTTP_RETRIES)
+  --http-retry-delay SECS
+                         Base retry backoff, doubled on each retry
+                         (default: 2)               (env: HTTP_RETRY_DELAY)
+  --http-connect-timeout SECS
+                         Connection timeout per API request (default: 10)
+                                                    (env: HTTP_CONNECT_TIMEOUT)
+  --http-timeout SECS    Total timeout per API request (default: 120;
+                         0 = unlimited)             (env: HTTP_TIMEOUT)
   -h, --help             Show help
 ```
 
@@ -450,6 +463,51 @@ options:
 ```
 
 Comparison applies to single-project reports; for a portfolio run (2+ project keys) the trend is skipped with a warning.
+
+## Reliability & Performance
+
+### Retries and timeouts
+
+Every SonarQube API request is bounded by a connection timeout and a total timeout, and **transient** failures are retried with exponential backoff:
+
+| Setting | Flag | Env / YAML | Default |
+|---|---|---|---|
+| Retries after a transient failure (`0` disables) | `--http-retries N` | `HTTP_RETRIES` / `http.retries` | `3` |
+| Base backoff in seconds, doubled per retry (2s, 4s, 8s …, capped at 60s) | `--http-retry-delay SECS` | `HTTP_RETRY_DELAY` / `http.retry_delay` | `2` |
+| Connection timeout in seconds | `--http-connect-timeout SECS` | `HTTP_CONNECT_TIMEOUT` / `http.connect_timeout` | `10` |
+| Total time per request in seconds (`0` = unlimited) | `--http-timeout SECS` | `HTTP_TIMEOUT` / `http.timeout` | `120` |
+
+What is retried: transport failures (connection refused/reset, DNS, timeouts) and HTTP `408`, `429`, `502`, `503`, `504`. A `Retry-After` header (seconds form) is honoured when it is longer than the backoff, up to the 60s cap. Other responses — `401`, `403`, `404`, `500` and so on — are deterministic and fail immediately. Each retry is logged as a warning.
+
+A request that still fails after the last retry fails the run (or, for optional data such as quality profiles, degrades as before). An unreachable server is always reported as an error rather than as an empty response.
+
+The webhook POST (`--notify-webhook`) uses the same two timeouts but is **not** retried, so a notification is never delivered twice.
+
+### Concurrency
+
+`--concurrency N` (env `CONCURRENCY`, YAML `http.concurrency`, default `4`) sets how many API workers run at once for the two fan-out workloads:
+
+- **Portfolio runs** — projects are fetched `N` at a time. Each project's log block is printed in key order once the fetch finishes, and the report lists projects in the order the keys were given, exactly as in a sequential run.
+- **Enrichment** (`--include-rule-descriptions`, `--include-code-snippets`) — unique rules, hotspot rules, and source files are fetched `N` at a time, once each.
+
+The two do not multiply: inside a portfolio run each project's enrichment is sequential, so at most `N` requests are in flight. Values above `16` are clamped. Use `--concurrency 1` for the fully sequential behaviour of earlier versions, for example against a small or rate-limited server.
+
+```bash
+./scripts/sonar-report.sh \
+  --url http://localhost:9000 --token YOUR_TOKEN \
+  --project-key "service-a,service-b,service-c,service-d" \
+  --include-rule-descriptions \
+  --concurrency 8 --http-retries 5 --http-timeout 60
+```
+
+```yaml
+http:
+  concurrency: 8
+  retries: 5
+  retry_delay: 2
+  connect_timeout: 10
+  timeout: 60
+```
 
 ## Webhook Notifications
 

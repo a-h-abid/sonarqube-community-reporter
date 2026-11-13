@@ -4,7 +4,7 @@
 
 - `scripts/sonar-report.sh`: main CLI, orchestration, config precedence, `--dry-run`.
 - `scripts/wait-for-analysis.sh`: standalone SonarQube CE task polling.
-- `scripts/lib/api.sh`: HTTP helpers, pagination, shared logging helpers.
+- `scripts/lib/api.sh`: HTTP helpers (retry/backoff/timeouts), pagination, `run_parallel` worker pool, shared logging helpers.
 - `scripts/lib/config.sh`: config parsing and safe key allowlist (`is_allowed_key`).
 - `scripts/lib/metrics.sh`: quality gate, issues, hotspots, rules, and measures collection.
 - `scripts/lib/portfolio.sh`: multi-project (portfolio) aggregation; rolls per-project report data up into one `.portfolio` node via `jq/portfolio-aggregate.jq`. Triggered when 2+ `--project-key`s are given. Generators branch on `.metadata.reportType == "portfolio"`.
@@ -68,5 +68,6 @@ Tests must be parallel-safe: isolate mutable state in `setup()` with unique `mkt
 - PDF generation depends on `wkhtmltopdf` and `xvfb`; spreadsheet generation depends on external converters. Handle missing tools gracefully.
 - `ssconvert --merge-to` names XLSX/ODS sheets from CSV filenames, including the `.csv` suffix.
 - Rule enrichment (`--include-rule-descriptions`) is optional and must degrade cleanly on API errors or insufficient permissions.
+- Fan-out API work goes through `run_parallel` (bounded by `CONCURRENCY`). Workers are subshells: return results via their stdout file, never via globals or in-memory caches, and keep `CONCURRENCY=1` output identical to the parallel output.
 - Put large reusable jq/awk programs in `scripts/lib/jq/` or `scripts/lib/awk/`; wrap smaller embedded programs with `# kcov-skip-start` / `# kcov-skip-end` when coverage would be misleading.
 - Keep awk portable for mawk: prefer `length()` checks over interval quantifiers like `{32,128}`.

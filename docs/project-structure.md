@@ -30,6 +30,7 @@
 │   ├── test_api.bats                 # Tests for scripts/lib/api.sh
 │   ├── test_metrics.bats             # Tests for scripts/lib/metrics.sh
 │   ├── test_wait_for_analysis.bats   # Tests for scripts/wait-for-analysis.sh
+│   ├── test_resilience.bats          # Tests for HTTP retries/timeouts and concurrency
 │   ├── test_reports.bats             # Tests for report generators
 │   └── fixtures/                     # JSON API response fixtures
 ├── .github/

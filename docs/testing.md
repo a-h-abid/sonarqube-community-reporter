@@ -58,6 +58,7 @@ Coverage outputs:
 | `tests/test_wait_for_analysis.bats` | 18 | `extract_task_id_from_report`, `_poll_by_task_id` (including PENDING→SUCCESS transition), `_poll_by_component`, `wait_for_analysis` dispatch |
 | `tests/test_main.bats` | 11 | `normalize_format`, `validate_report_formats`, `validate_params` (dry-run mode), `parse_args` (new flags) |
 | `tests/test_reports.bats` | 122 | `generate_json_report`, `generate_md_report`, `generate_html_report`, `generate_csv_report`, `generate_sarif_report` — validates file creation, content, rendered metadata, CSV row data, and SARIF 2.1 structure |
+| `tests/test_resilience.bats` | 52 | HTTP retry/backoff/timeouts in `sonar_api_get`, `run_parallel`, parallel portfolio fetch and enrichment prefetch, `--concurrency` / `--http-*` flag wiring and validation |
 | `tests/test_notify.bats` | 12 | `send_webhook_notification` with mocked `curl` — payload structure, emoji selection, HTTP error handling |
 
 Test fixtures (JSON files representing every SonarQube API response shape) live in `tests/fixtures/`.

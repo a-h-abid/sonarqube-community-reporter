@@ -102,6 +102,8 @@ send_webhook_notification() {
   local http_code
   http_code=$(curl -s -o "$tmpfile" -w '%{http_code}' \
     -X POST \
+    --connect-timeout "$(http_setting "${HTTP_CONNECT_TIMEOUT:-}" 10)" \
+    --max-time "$(http_setting "${HTTP_TIMEOUT:-}" 120)" \
     -H "Content-Type: application/json" \
     -d "$payload" \
     "$webhook_url") || {

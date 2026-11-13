@@ -95,6 +95,24 @@ ISSUE_TYPES=
 # severity/type filters. Leave empty for no limit.
 MAX_ISSUES=
 
+# --- HTTP Resilience & Concurrency ------------------------------------------
+# Parallel API workers for portfolio projects and enrichment lookups.
+# 1 = fully sequential. Values above 16 are clamped.
+CONCURRENCY=4
+
+# Retries for transient API failures (connection errors, timeouts,
+# HTTP 408/429/502/503/504). 0 disables retries.
+HTTP_RETRIES=3
+
+# Base retry backoff in seconds, doubled on each retry (capped at 60s)
+HTTP_RETRY_DELAY=2
+
+# Seconds allowed to establish a connection
+HTTP_CONNECT_TIMEOUT=10
+
+# Seconds allowed per API request (0 = unlimited)
+HTTP_TIMEOUT=120
+
 # --- Additional Options -----------------------------------------------------
 # Analysis ID (optional — for reporting purposes)
 ANALYSIS_ID=

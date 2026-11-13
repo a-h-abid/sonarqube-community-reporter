@@ -386,6 +386,85 @@ fetch_source_snippet() {
 }
 
 # ---------------------------------------------------------------------------
+# Parallel prefetch — warms the in-memory caches CONCURRENCY requests at a
+# time, so the per-issue enrichment loops below only ever hit the cache.
+# Workers run in subshells (see run_parallel), so each prints its result and
+# the parent loads it into the cache.
+# ---------------------------------------------------------------------------
+_prefetch_rule_worker() {
+  fetch_rule_details "$1"
+}
+
+# Item is "<hotspot_key>\t<rule_key>".
+_prefetch_hotspot_worker() {
+  fetch_hotspot_details "${1%%$'\t'*}" "${1#*$'\t'}"
+}
+
+_prefetch_source_worker() {
+  local comp_enc
+  comp_enc=$(printf '%s' "$1" | jq -sRr @uri)
+  sonar_api_get "sources/raw?key=${comp_enc}"
+}
+
+# ---------------------------------------------------------------------------
+# _prefetch_parallel <rule|hotspot|source> [item...]
+#   No-op when CONCURRENCY is 1 or fewer than two items are uncached — the
+#   sequential loops then fetch on demand exactly as before.
+#   Returns 1 when any fetch failed (worker errors are already logged).
+# ---------------------------------------------------------------------------
+_prefetch_parallel() {
+  local kind="$1"
+  shift
+
+  local jobs
+  jobs=$(concurrency_level)
+  [[ "$jobs" -le 1 ]] && return 0
+
+  local -a todo=()
+  local item cache_key
+  for item in "$@"; do
+    [[ -z "$item" ]] && continue
+    case "$kind" in
+      rule)    [[ -n "${_RULE_CACHE[$item]:-}" ]] && continue ;;
+      hotspot) cache_key="${item#*$'\t'}"
+               [[ -n "${_HOTSPOT_RULE_CACHE[$cache_key]:-}" ]] && continue ;;
+      source)  [[ -n "${_SOURCE_CACHE[$item]:-}" ]] && continue ;;
+      *)       log_error "Unsupported prefetch kind: ${kind}"; return 1 ;;
+    esac
+    todo+=("$item")
+  done
+  [[ "${#todo[@]}" -lt 2 ]] && return 0
+
+  local work_dir
+  if ! work_dir=$(create_temp_dir); then
+    log_error "Failed to create temp directory for ${kind} prefetch"
+    return 1
+  fi
+
+  local rc=0
+  run_parallel "$jobs" "$work_dir" "_prefetch_${kind}_worker" "${todo[@]}" || rc=1
+
+  local i out
+  for ((i = 0; i < ${#todo[@]}; i++)); do
+    [[ -f "${work_dir}/${i}.ok" ]] || continue
+    item="${todo[$i]}"
+    out="${work_dir}/${i}.out"
+    case "$kind" in
+      rule)    _RULE_CACHE[$item]=$(<"$out") ;;
+      hotspot) _HOTSPOT_RULE_CACHE[${item#*$'\t'}]=$(<"$out") ;;
+      source)
+        if [[ "$(wc -c < "$out")" -le "$_SOURCE_CACHE_MAX_BYTES" ]]; then
+          _SOURCE_CACHE[$item]=$(<"$out")
+        fi
+        ;;
+    esac
+  done
+
+  rm -rf "$work_dir"
+  return "$rc"
+}
+
+# ---------------------------------------------------------------------------
 # enrich_issue_objects <issues_json_array>
 # ---------------------------------------------------------------------------
 enrich_issue_objects() {
@@ -405,6 +484,25 @@ enrich_issue_objects() {
   if [[ "$count" -eq 0 ]]; then
     echo "$issues_json"
     return 0
+  fi
+
+  local -a _prefetch_items=()
+  if [[ -n "$rule_mode" ]]; then
+    mapfile -t _prefetch_items < <(echo "$issues_json" | jq -r '[.[].rule // empty] | unique[]')
+    if ! _prefetch_parallel rule "${_prefetch_items[@]+"${_prefetch_items[@]}"}"; then
+      log_error "Failed to prefetch rule details"
+      return 1
+    fi
+  fi
+  if [[ "$with_snippets" == "true" ]]; then
+    # kcov-skip-start
+    mapfile -t _prefetch_items < <(echo "$issues_json" | jq -r '
+      [.[] | select(((.startLine // .line) | type) == "number") | .component // empty] | unique[]')
+    # kcov-skip-end
+    if ! _prefetch_parallel source "${_prefetch_items[@]+"${_prefetch_items[@]}"}"; then
+      log_error "Failed to prefetch source files"
+      return 1
+    fi
   fi
 
   if [[ -n "$rule_mode" ]]; then
@@ -496,6 +594,30 @@ enrich_hotspot_objects() {
   tmp_out=$(create_temp_file)
   # shellcheck disable=SC2064
   trap "rm -f '$tmp_out'" RETURN
+
+  local -a _prefetch_items=()
+  if [[ -n "$rule_mode" ]]; then
+    # One hotspot per rule: details are cached by rule key.
+    # kcov-skip-start
+    mapfile -t _prefetch_items < <(echo "$hotspots_json" | jq -r '
+      map(select((.key // "") != "" and (.rule // "") != ""))
+      | unique_by(.rule)[] | "\(.key)\t\(.rule)"')
+    # kcov-skip-end
+    if ! _prefetch_parallel hotspot "${_prefetch_items[@]+"${_prefetch_items[@]}"}"; then
+      log_error "Failed to prefetch hotspot details"
+      return 1
+    fi
+  fi
+  if [[ "$with_snippets" == "true" ]]; then
+    # kcov-skip-start
+    mapfile -t _prefetch_items < <(echo "$hotspots_json" | jq -r '
+      [.[] | select(((.startLine // .line) | type) == "number") | .component // empty] | unique[]')
+    # kcov-skip-end
+    if ! _prefetch_parallel source "${_prefetch_items[@]+"${_prefetch_items[@]}"}"; then
+      log_error "Failed to prefetch source files"
+      return 1
+    fi
+  fi
 
   local hotspot hs_key rule_key component start_line end_line rule_obj snippet_obj
   while IFS= read -r hotspot; do
